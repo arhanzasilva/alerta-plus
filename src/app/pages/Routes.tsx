@@ -930,11 +930,6 @@ export function Routes() {
           </motion.div>
         ) : (
           <div className="space-y-4">
-            <button onClick={() => { setShowResults(false); setSelectedRouteIdx(null); }} className={`flex items-center gap-2 ${textSecondary} mb-2 active:scale-95 transition text-sm`}>
-              <IconArrowLeft className="w-4 h-4" />
-              <span>{t("routes.newSearch", language)}</span>
-            </button>
-
             <div className={`${cardBg} border ${cardBorder} p-3.5 rounded-xl`}>
               <div className="flex items-center gap-3 mb-2.5">
                 <div className="w-2.5 h-2.5 bg-[#2b7fff] rounded-full" />
