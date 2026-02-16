@@ -70,7 +70,6 @@ export function Layout() {
     { path: "/profile", label: t("nav.profile", language) },
   ];
 
-  /* ── Custom SVG Nav Icons matching Figma (Responsive) ── */
   const NavMapIcon = ({ active }: { active: boolean }) => (
     <svg
       className="w-7 h-7 lg:w-8 lg:h-8"

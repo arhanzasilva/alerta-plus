@@ -529,7 +529,7 @@ export function MapView() {
         )}
       </AnimatePresence>
 
-      {/* ═══ Top blue glow (from Figma) ═══ */}
+      {/* Top blue glow */}
       <div className="absolute top-0 left-0 right-0 h-[86px] bg-[#2b7fff] opacity-10 blur-[64px] rounded-full pointer-events-none z-[5]" />
 
       {/* ═══ Layers Button (top right) ═══ */}
