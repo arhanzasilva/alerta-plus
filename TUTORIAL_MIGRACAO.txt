@@ -1,0 +1,346 @@
+================================================================
+  TUTORIAL COMPLETO: Figma Make -> Claude Code (Local)
+  Alerta+ — Passo a passo com prompts prontos
+================================================================
+
+
+================================================================
+PARTE 1 — EXPORTAR O PROJETO DO FIGMA MAKE
+================================================================
+
+1. No Figma Make, clique no menu (tres pontinhos ou "...")
+   no canto superior direito do editor de codigo
+
+2. Selecione "Download project" ou "Export ZIP"
+   (vai baixar um .zip com todos os arquivos do projeto)
+
+3. Crie uma pasta no seu computador para o projeto:
+   - Windows: C:\projetos\alerta-plus
+   - Mac/Linux: ~/projetos/alerta-plus
+
+4. Extraia o ZIP dentro dessa pasta
+   Apos extrair, a estrutura deve ser:
+     alerta-plus/
+       index.html
+       package.json
+       vite.config.ts
+       tsconfig.json
+       CLAUDE.md        <-- importante! Claude Code le isso automaticamente
+       src/
+         main.tsx
+         app/
+         styles/
+         imports/
+       ...
+
+
+================================================================
+PARTE 2 — INSTALAR FERRAMENTAS (so precisa fazer 1 vez)
+================================================================
+
+2.1 — Instalar Node.js (se nao tiver)
+  Baixe de: https://nodejs.org/
+  Versao recomendada: 20 LTS ou superior
+  Apos instalar, teste no terminal:
+    node --version    (deve mostrar v20.x.x ou superior)
+    npm --version     (deve mostrar 10.x.x ou superior)
+
+2.2 — Instalar Claude Code
+  No terminal, rode:
+    npm install -g @anthropic-ai/claude-code
+
+  Apos instalar, teste:
+    claude --version
+
+  Nota: Voce precisa de uma conta Anthropic com creditos
+  ou um plano ativo para usar o Claude Code.
+  Acesse https://console.anthropic.com para configurar.
+
+  Alternativa: Se voce tem o Claude Pro/Max, pode usar
+  o Claude Code integrado no claude.ai (sem instalar nada).
+
+
+================================================================
+PARTE 3 — RODAR O PROJETO LOCALMENTE
+================================================================
+
+3.1 — Abra o terminal na pasta do projeto:
+  cd ~/projetos/alerta-plus
+  (ou cd C:\projetos\alerta-plus no Windows)
+
+3.2 — Instale as dependencias:
+  npm install
+
+  Isso vai criar a pasta node_modules/ e o arquivo package-lock.json
+  Pode levar 1-3 minutos na primeira vez.
+
+3.3 — Rode o projeto:
+  npm run dev
+
+  Vai aparecer algo como:
+    VITE v6.3.5  ready in 300 ms
+    -> Local:   http://localhost:5173/
+
+3.4 — Abra no navegador:
+  http://localhost:5173
+
+  Voce deve ver a tela de Splash do Alerta+!
+  (Se der erro, veja a secao SOLUCAO DE PROBLEMAS no final)
+
+3.5 — Para parar o servidor: Ctrl+C no terminal
+
+
+================================================================
+PARTE 4 — LIMPEZA INICIAL (OPCIONAL MAS RECOMENDADO)
+================================================================
+
+Antes de comecar a trabalhar com o Claude Code, limpe os
+arquivos de referencia do Figma que nao sao usados pelo app.
+
+No terminal (na pasta do projeto):
+
+  Windows (CMD ou PowerShell):
+    scripts\cleanup-figma-imports.bat
+
+  Mac/Linux:
+    bash scripts/cleanup-figma-imports.sh
+
+Isso remove ~76 arquivos .tsx/.ts da pasta src/imports/
+que eram apenas referencia visual do Figma.
+
+
+================================================================
+PARTE 5 — USANDO O CLAUDE CODE
+================================================================
+
+5.1 — Abrir o Claude Code no projeto:
+
+  No terminal, navegue ate a pasta do projeto e rode:
+    cd ~/projetos/alerta-plus
+    claude
+
+  O Claude Code vai:
+  - Abrir um terminal interativo
+  - Ler automaticamente o arquivo CLAUDE.md
+  - Ja ter todo o contexto do projeto Alerta+
+
+5.2 — PRIMEIRO PROMPT (importante!):
+
+  Cole este prompt exatamente como esta:
+
+  -------------------------------------------------------
+  Ola! Este e o projeto Alerta+, um app web (SPA) de alertas
+  urbanos para Manaus/AM. Acabei de migrar do Figma Make para
+  ambiente local. O app foi desenvolvido com foco em mobile-first
+  mas precisa ser RESPONSIVO — deve funcionar bem em celulares,
+  tablets e desktops. Por favor:
+
+  1. Leia o CLAUDE.md para entender o contexto completo
+  2. Verifique se o projeto esta funcionando corretamente
+     rodando npm run dev
+  3. Analise se o layout esta responsivo em diferentes tamanhos
+     de tela (mobile 375px, tablet 768px, desktop 1024px+)
+  4. Me diga se encontrou algum problema que precisa ser
+     corrigido
+
+  Nao faca nenhuma alteracao ainda, apenas analise.
+  -------------------------------------------------------
+
+5.3 — Se o Claude encontrar erros, peca para corrigir:
+
+  -------------------------------------------------------
+  Corrija os erros que voce encontrou. Lembre-se:
+  - NAO sobrescreva Settings.tsx, Onboarding.tsx,
+    Register.tsx, Notifications.tsx e Login.tsx sem ler primeiro
+  - O projeto usa Tailwind CSS v4 (sem tailwind.config.js)
+  - MapView.tsx usa Leaflet direto (L.map), NAO react-leaflet
+  - O app deve ser RESPONSIVO: mobile-first, mas adaptando
+    para tablet (md:) e desktop (lg:) com Tailwind breakpoints
+  -------------------------------------------------------
+
+
+================================================================
+PARTE 6 — PROMPTS PARA CONTINUAR O DESENVOLVIMENTO
+================================================================
+
+Aqui estao prompts prontos para as proximas tarefas do Alerta+:
+
+
+--- PROMPT: Tornar o app responsivo (PRIORIDADE ALTA) ---
+
+  O Alerta+ foi desenvolvido com foco mobile-first (375px).
+  Preciso que voce torne TODAS as paginas responsivas para
+  funcionar bem em 3 breakpoints:
+  - Mobile: < 768px (layout atual, coluna unica)
+  - Tablet: 768px-1023px (md: — ajustar espacamentos,
+    cards em grid 2 colunas quando fizer sentido)
+  - Desktop: 1024px+ (lg: — conteudo centralizado com
+    max-width, sidebars se aplicavel, grids maiores)
+
+  Use os breakpoints do Tailwind CSS v4 (sm:, md:, lg:, xl:).
+  Abordagem mobile-first: estilos base sao mobile, e voce
+  adiciona classes com prefixo md: e lg: para telas maiores.
+
+  Comece pelas paginas mais importantes:
+  1. Layout.tsx (shell + navbar — no desktop, navbar pode
+     virar sidebar lateral)
+  2. MapView.tsx (mapa + bottom sheet — no desktop, sheet
+     pode virar painel lateral)
+  3. Profile.tsx
+  4. Notifications.tsx
+  5. Settings.tsx
+  6. Demais paginas
+
+  Leia cada arquivo antes de editar. NAO sobrescreva
+  Settings.tsx, Onboarding.tsx, Register.tsx, Notifications.tsx
+  e Login.tsx sem ler primeiro (tem edicoes manuais).
+
+
+--- PROMPT: Aplicar dark mode no Onboarding ---
+
+  Aplique dark mode e traducoes (pt/en/es) na pagina
+  Onboarding.tsx, seguindo o mesmo padrao das outras paginas.
+  Use o hook useThemeClasses(theme) e a funcao t(key, language)
+  de translations.ts. Leia o arquivo primeiro antes de editar
+  (tem edicoes manuais). Adicione as chaves de traducao
+  necessarias em translations.ts.
+
+
+--- PROMPT: Criar nova pagina ---
+
+  Crie a pagina [NOME DA PAGINA] com rota /[rota].
+  Requisitos:
+  - Dark mode com useThemeClasses
+  - Traducoes pt/en/es com t()
+  - Animacoes com motion/react
+  - Icones com @tabler/icons-react (outline)
+  - Responsivo mobile-first
+  - Adicione a rota em routes.tsx
+
+  [Descreva o que a pagina deve fazer]
+
+
+--- PROMPT: Corrigir bug ---
+
+  Ha um bug em [arquivo/pagina]:
+  [Descreva o problema]
+
+  Leia o arquivo primeiro, entenda o contexto, e corrija
+  sem alterar outras funcionalidades. Lembre que o projeto
+  usa Context API (AppContext.tsx) para estado global.
+
+
+--- PROMPT: Adicionar feature ---
+
+  Adicione [funcionalidade] ao Alerta+.
+  - Se precisar de estado global, adicione ao AppContext.tsx
+    com persistencia em localStorage (prefixo alertaplus_)
+  - Se precisar de traducoes, adicione as 3 linguas em
+    translations.ts
+  - Se precisar de dark mode, use useThemeClasses(theme)
+  - Se precisar de nova rota, adicione em routes.tsx
+
+
+--- PROMPT: Conectar com backend real (Supabase) ---
+
+  Quero conectar o Alerta+ com Supabase para ter:
+  - Autenticacao real (Google, email)
+  - Banco de dados para incidentes
+  - Persistencia de perfil na nuvem
+  - Sincronizacao entre dispositivos
+
+  Crie o cliente Supabase em src/app/lib/supabase.ts
+  e adapte o AppContext.tsx para usar Supabase no lugar
+  do localStorage quando disponivel, mantendo o fallback
+  para localStorage quando offline.
+
+  As variaveis de ambiente devem estar em .env.local:
+  VITE_SUPABASE_URL=
+  VITE_SUPABASE_ANON_KEY=
+
+
+================================================================
+PARTE 7 — DICAS PARA TRABALHAR COM CLAUDE CODE
+================================================================
+
+7.1 — O CLAUDE.md e seu melhor amigo
+  - O Claude Code le CLAUDE.md automaticamente ao abrir
+  - Se voce adicionar informacoes ao projeto, atualize o CLAUDE.md
+  - Exemplo: se criar novas paginas, adicione na lista de paginas
+
+7.2 — Sempre peca para LER antes de EDITAR
+  - "Leia o arquivo X.tsx antes de editar"
+  - Isso evita que o Claude sobrescreva suas edicoes manuais
+
+7.3 — Seja especifico nos prompts
+  - Ruim: "melhore o perfil"
+  - Bom: "No Profile.tsx, adicione um avatar editavel com
+    upload de foto. Mantenha os 3 estados de auth."
+
+7.4 — Use o Claude Code para revisar codigo
+  - "Revise o arquivo Routes.tsx e verifique se ha
+    template literals com backtick/} faltando"
+
+7.5 — Commits frequentes
+  - Apos cada mudanca funcional, faca um commit no git:
+    git add .
+    git commit -m "feat: descricao da mudanca"
+
+7.6 — Para inicializar o git (primeira vez):
+  git init
+  git add .
+  git commit -m "feat: migracao do Figma Make para ambiente local"
+
+
+================================================================
+PARTE 8 — SOLUCAO DE PROBLEMAS
+================================================================
+
+PROBLEMA: npm install falha
+  - Verifique se o Node.js esta instalado: node --version
+  - Delete node_modules e package-lock.json, rode npm install de novo
+  - Se der erro de permissao: sudo npm install (Mac/Linux)
+
+PROBLEMA: npm run dev mostra erro de TypeScript
+  - Erros de tipo sao normais na primeira vez
+  - O app deve funcionar mesmo com erros de tipo
+  - Peca ao Claude Code para corrigir: "Corrija os erros de
+    TypeScript que aparecem no terminal"
+
+PROBLEMA: Pagina em branco no navegador
+  - Abra o console do navegador (F12 > Console)
+  - Copie o erro e cole para o Claude Code:
+    "O app mostra pagina em branco. Erro no console: [erro]"
+
+PROBLEMA: Leaflet/mapa nao aparece
+  - Verifique se o CSS do Leaflet esta importado em index.css:
+    @import 'leaflet/dist/leaflet.css';
+  - Os tiles do mapa precisam de internet
+
+PROBLEMA: Fontes nao carregam (Poppins)
+  - Verifique se fonts.css tem o import do Google Fonts
+  - Precisa de internet para carregar as fontes
+
+PROBLEMA: Dark mode nao funciona
+  - Verifique se theme.css tem a classe .dark com as variaveis
+  - Verifique se o AppContext esta adicionando/removendo a
+    classe "dark" no document.documentElement
+
+PROBLEMA: Claude Code nao reconhece o projeto
+  - Certifique-se de rodar "claude" dentro da pasta do projeto
+  - Verifique se o CLAUDE.md existe na raiz do projeto
+
+
+================================================================
+RESUMO RAPIDO (COLA AQUI)
+================================================================
+
+  cd ~/projetos/alerta-plus     # entrar na pasta
+  npm install                    # instalar deps (1a vez)
+  npm run dev                    # rodar o app
+  claude                         # abrir Claude Code
+
+  # No Claude Code, primeiro prompt:
+  "Leia o CLAUDE.md e verifique se o projeto esta ok"
+
+================================================================

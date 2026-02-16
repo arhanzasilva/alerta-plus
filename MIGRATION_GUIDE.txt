@@ -1,0 +1,222 @@
+================================================================
+  ALERTA+ — GUIA DE MIGRACAO: Figma Make -> Ambiente Local
+================================================================
+
+STACK DO PROJETO
+  - React 18.3.1 + TypeScript (web, NAO e React Native)
+  - Vite 6.3.5 (bundler)
+  - Tailwind CSS v4.1.12 (via @tailwindcss/vite plugin)
+  - react-router v7.13.0 (Data mode com createBrowserRouter)
+  - motion 12.x (animacoes, import de "motion/react")
+  - Leaflet 1.9.x (mapa direto via L.map, sem react-leaflet)
+  - @tabler/icons-react (icones — outline + filled para categorias/achievements)
+  - Sonner (toasts)
+  - Context API + localStorage (estado global)
+
+
+================================================================
+PASSO A PASSO PARA RODAR LOCALMENTE
+================================================================
+
+1. Exportar o ZIP do Figma Make e extrair numa pasta
+
+2. Instalar dependencias:
+   npm install
+   (ou pnpm install, ou yarn install)
+
+3. Rodar em modo de desenvolvimento:
+   npm run dev
+
+4. Abrir no navegador:
+   http://localhost:5173
+
+5. Build de producao:
+   npm run build
+   npm run preview
+
+
+================================================================
+ARQUIVOS CRIADOS PARA MIGRACAO
+================================================================
+
+Os seguintes arquivos NAO existiam no Figma Make (o sandbox
+os gera internamente) e foram criados manualmente:
+
+  /index.html           — Ponto de entrada HTML do Vite
+  /src/main.tsx         — Ponto de entrada React (ReactDOM.createRoot)
+  /tsconfig.json        — Config TypeScript (project references)
+  /tsconfig.app.json    — Config TypeScript do app
+  /src/vite-env.d.ts    — Referencia de tipos do Vite
+  /.gitignore           — Gitignore padrao
+
+
+================================================================
+MUDANCAS NO PACKAGE.JSON
+================================================================
+
+  - Nome alterado de "@figma/my-make-file" para "alerta-plus"
+  - react e react-dom movidos de peerDependencies para dependencies
+  - Adicionados em devDependencies: typescript, @types/react,
+    @types/react-dom, @types/leaflet
+  - Scripts adicionados: "dev" e "preview"
+  - react-leaflet REMOVIDO (nao e usado, MapView usa Leaflet direto)
+  - Removida secao peerDependencies/peerDependenciesMeta
+  - Removida secao pnpm.overrides
+
+
+================================================================
+DEPENDENCIAS REMOVIDAS (NAO USADAS PELO APP)
+================================================================
+
+  Estas dependencias estavam no package.json original do Figma Make
+  mas NAO sao importadas em nenhum arquivo do app:
+
+  REMOVIDAS:
+    @emotion/react         — era peer dep do @mui/material (nao usado)
+    @emotion/styled        — era peer dep do @mui/material (nao usado)
+    @mui/icons-material    — nao importado em nenhuma pagina
+    @mui/material          — nao importado em nenhuma pagina
+    @popperjs/core         — nao importado (pages usam posicionamento proprio)
+    react-dnd              — nao importado
+    react-dnd-html5-backend — nao importado
+    react-leaflet          — nao importado (MapView usa Leaflet direto)
+    react-popper           — nao importado
+    react-responsive-masonry — nao importado
+    react-slick            — nao importado
+    date-fns               — nao importado (datas calculadas manualmente)
+
+  MANTIDAS (usadas pelos componentes shadcn-ui em /src/app/components/ui/):
+    @radix-ui/* (15 pacotes) — base dos componentes shadcn
+    cmdk                   — usado por command.tsx
+    embla-carousel-react   — usado por carousel.tsx
+    input-otp              — usado por input-otp.tsx
+    lucide-react           — icones nos componentes shadcn
+    react-day-picker       — usado por calendar.tsx
+    react-hook-form        — usado por form.tsx
+    react-resizable-panels — usado por resizable.tsx
+    recharts               — usado por chart.tsx
+    vaul                   — usado por drawer.tsx
+    next-themes            — usado por sonner.tsx
+
+  NOTA: Os componentes em /src/app/components/ui/ (shadcn) nao sao
+  importados pelas paginas atualmente, mas sao uteis para expansao
+  futura. Se quiser uma instalacao minima, pode remover esses
+  pacotes e a pasta ui/ inteira.
+
+
+================================================================
+LIMPEZA DE ARQUIVOS DO FIGMA (OPCIONAL MAS RECOMENDADO)
+================================================================
+
+A pasta /src/imports/ contem ~80 arquivos gerados pelo Figma:
+  - Componentes .tsx de referencia visual (telas do Figma convertidas)
+  - Arquivos .ts com SVG paths
+
+Apenas 4 arquivos SVG sao REALMENTE usados pelo app:
+
+  svg-hkfx6ct22z.ts  — Layout.tsx (icones do menu inferior)
+  svg-90w5vqo0ll.ts  — Onboarding.tsx (ilustracoes das telas)
+  svg-53og7kmmrf.ts  — Onboarding.tsx (seta de voltar)
+  svg-h2odaglmib.ts  — Splash.tsx (logo Alerta+)
+
+Para limpar automaticamente:
+  bash scripts/cleanup-figma-imports.sh
+
+Outros arquivos removiveis (referencia Figma, nao usados):
+  /replace_font.py
+  /guidelines/Guidelines.md
+  /ATTRIBUTIONS.md
+  /postcss.config.mjs (vazio, Tailwind v4 nao precisa)
+  /src/app/components/figma/ImageWithFallback.tsx
+
+
+================================================================
+ESTRUTURA DO PROJETO (ARQUIVOS DO APP)
+================================================================
+
+  src/
+    main.tsx                          — Entry point React
+    vite-env.d.ts                     — Tipos Vite
+    styles/
+      fonts.css                       — Import Google Fonts (Poppins)
+      index.css                       — Imports globais + overrides Leaflet
+      tailwind.css                    — Config Tailwind v4
+      theme.css                       — Variaveis CSS + dark mode + @theme
+    app/
+      App.tsx                         — Root component (RouterProvider + Toaster)
+      routes.tsx                      — Rotas (createBrowserRouter)
+      context/
+        AppContext.tsx                 — Estado global (perfil, incidentes, config)
+        translations.ts               — Traducoes pt/en/es com funcao t()
+      components/
+        Layout.tsx                    — Shell com navbar inferior (3 abas)
+        AchievementToast.tsx          — Toast de conquista desbloqueada
+        NavigationMode.tsx            — Tela de navegacao GPS
+        NotificationsPanel.tsx        — Painel de notificacoes
+        QuickReport.tsx               — Report rapido de incidente
+        ui/                           — Componentes Radix/shadcn-ui
+      pages/
+        Splash.tsx                    — Tela de splash (redirect para /map ou /onboarding)
+        Onboarding.tsx                — Onboarding 4 telas
+        MapView.tsx                   — Mapa principal (Leaflet direto)
+        Notifications.tsx             — Lista de alertas
+        Profile.tsx                   — Perfil (3 estados: guest/anonymous/authenticated)
+        Settings.tsx                  — Configuracoes (subpaginas)
+        Routes.tsx                    — Rotas inteligentes
+        ReportIncident.tsx            — Reportar incidente
+        Login.tsx                     — Login por email
+        Register.tsx                  — Registro de conta
+        HelpFeedback.tsx              — Pedir ajuda
+        HelpHistory.tsx               — Historico de solicitacoes
+      data/
+        crimeZones.ts                 — Dados de zonas de risco de Manaus
+
+
+================================================================
+SISTEMA DE AUTENTICACAO (3 ESTADOS)
+================================================================
+
+  guest       — userProfile === null (visitante sem perfil)
+  anonymous   — userProfile existe, sem loginMethod (perfil local)
+  authenticated — userProfile com loginMethod preenchido (logado)
+
+Persistencia: tudo em localStorage com prefixo "alertaplus_"
+
+
+================================================================
+DARK MODE
+================================================================
+
+  - Toggle via toggleTheme() no AppContext
+  - Classe "dark" no <html> + variaveis CSS em theme.css
+  - Hook useThemeClasses(theme) retorna classes tematicas
+  - Variavel tc.isDark para condicionais
+
+
+================================================================
+TRADUCOES (i18n)
+================================================================
+
+  - 3 idiomas: pt (padrao), en, es
+  - Funcao t(key, language) em translations.ts
+  - Todas as chaves organizadas por prefixo:
+    map.*, nav.*, profile.*, settings.*, help.*, history.*, etc.
+  - Utilitario formatDistanceWithUnit(meters, unit, language)
+
+
+================================================================
+NOTAS PARA CLAUDE CODE
+================================================================
+
+  - Sempre verificar backtick/} na linha ~620 de Routes.tsx
+    (bug recorrente em template literals de className)
+  - NAO sobrescrever Settings.tsx, Onboarding.tsx, Register.tsx,
+    Notifications.tsx e Login.tsx sem ler primeiro (edições manuais)
+  - Icones: @tabler/icons-react outline em geral,
+    filled apenas em CATEGORY_CONFIG de Routes.tsx (4 icones)
+    e ACHIEVEMENT_DEFS de AppContext.tsx (16 icones)
+  - MapView.tsx usa Leaflet direto (L.map + refs/effects),
+    NAO usar react-leaflet
+  - Menu inferior do Layout.tsx: apenas 3 abas (Mapa, Alertas, Perfil)
+  - Tela de Rotas: acessivel pelos atalhos no bottom sheet do MapView,
+    abre full-screen sem navbar
