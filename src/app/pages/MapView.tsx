@@ -243,6 +243,8 @@ export function MapView() {
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const incidentMarkersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup }>>(new Map());
   const clickedMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const hasFlownToUserRef = useRef(false);
+  const initialUserLocationRef = useRef(userLocation);
 
   // Visible incidents
   const visibleIncidents = useMemo(
@@ -300,29 +302,27 @@ export function MapView() {
     if (userMarkerRef.current) {
       userMarkerRef.current.setLngLat(lngLat);
     } else {
-      // Create custom user location marker
       const el = document.createElement("div");
-      el.className = "user-location-marker";
-      el.style.cssText = `
-        width: 20px;
-        height: 20px;
-        background: #2b7fff;
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 0 10px rgba(43, 127, 255, 0.5);
-      `;
-
+      el.className = "user-location-dot";
       userMarkerRef.current = new mapboxgl.Marker({ element: el })
         .setLngLat(lngLat)
         .addTo(map);
     }
   }, [userLocation]);
 
-  // Pan map when user location changes significantly
+  // Fly to user location only on the first real GPS fix
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !userLocation) return;
-    map.flyTo({ center: [userLocation.lng, userLocation.lat], essential: true, duration: 1000 });
+
+    // Skip if this is still the hardcoded initial value
+    const isInitial =
+      userLocation.lat === initialUserLocationRef.current?.lat &&
+      userLocation.lng === initialUserLocationRef.current?.lng;
+    if (isInitial || hasFlownToUserRef.current) return;
+
+    hasFlownToUserRef.current = true;
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 16, essential: true, duration: 1200 });
   }, [userLocation]);
 
   // Render incident overlays (zones + markers)
