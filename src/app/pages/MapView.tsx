@@ -302,18 +302,42 @@ export function MapView() {
     if (userMarkerRef.current) {
       userMarkerRef.current.setLngLat(lngLat);
     } else {
+      // Wrapper
       const el = document.createElement("div");
       el.style.cssText = `
-        width: 20px;
-        height: 20px;
+        position: relative;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+      // Pulsing ring
+      const ring = document.createElement("div");
+      ring.style.cssText = `
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(43, 127, 255, 0.22);
+        animation: user-ring-pulse 2s ease-out infinite;
+      `;
+      // Center dot
+      const dot = document.createElement("div");
+      dot.style.cssText = `
+        width: 18px;
+        height: 18px;
         background: #2b7fff;
         border: 3px solid white;
         border-radius: 50%;
-        box-shadow: 0 0 0 0 rgba(43, 127, 255, 0.55);
-        animation: user-dot-pulse 2s infinite;
-        cursor: default;
+        box-shadow: 0 2px 10px rgba(43, 127, 255, 0.6);
+        position: relative;
+        z-index: 1;
       `;
-      userMarkerRef.current = new mapboxgl.Marker({ element: el })
+      el.appendChild(ring);
+      el.appendChild(dot);
+
+      userMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
         .setLngLat(lngLat)
         .addTo(map);
     }
@@ -331,7 +355,7 @@ export function MapView() {
     if (isInitial || hasFlownToUserRef.current) return;
 
     hasFlownToUserRef.current = true;
-    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 16, essential: true, duration: 1200 });
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, essential: true, duration: 1400 });
   }, [userLocation]);
 
   // Render incident overlays (zones + markers)
