@@ -266,7 +266,7 @@ export function Routes() {
     setDestination(route.destination);
     setShowResults(true);
     incrementRoutesSearched();
-    toast.success(t("routes.routeLoaded", language));
+    searchRealRoutes(route.origin, route.destination);
   };
 
   const toggleFormDay = (day: string) => {
@@ -769,14 +769,17 @@ export function Routes() {
       map.on('load', drawRoute);
     }
 
-    // Cleanup function
+  }, [selectedRouteIdx, routes, theme, originCoords, destinationCoords, origin, destination]);
+
+  // Clean up map instance on component unmount
+  useEffect(() => {
     return () => {
-      if (selectedRouteIdx === null && mapInstanceRef.current) {
+      if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, [selectedRouteIdx, routes, theme, originCoords, destinationCoords, origin, destination]);
+  }, []);
 
   const isDark = theme === "dark";
   const bgClass = isDark ? "bg-[#111827]" : "bg-[#f9fafb]";

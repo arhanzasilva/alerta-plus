@@ -146,21 +146,6 @@ const LAYER_FILTERS = [
   { key: "crimeZones" as const, label: "Zonas de Risco", color: "#EF4444", icon: <IconAlertOctagon size={15} /> },
 ];
 
-// ─── Recent locations mock data ───
-const RECENT_LOCATIONS = [
-  { id: "1", name: "R.Laurentino, n26", address: "26 Rua Laurentino, Cidade Nova 2, AM" },
-  { id: "2", name: "Av. Beira Mar, n12", address: "12 Av. Beira Mar, Centro, Coroado, AM" },
-];
-
-const SUGGESTIONS = [
-  { id: "1", name: "R.Laurentino, n26", address: "26 Rua Laurentino, Cidade Nova 2, AM" },
-  { id: "2", name: "Av. Beira Mar, n12", address: "12 Av. Beira Mar, Centro, Coroado, AM" },
-  { id: "3", name: "Rua 24 de Maio, Centro", address: "Rua 24 de Maio, Centro, Manaus, AM" },
-  { id: "4", name: "Teatro Amazonas", address: "Largo de Sao Sebastiao, Centro", distance: "1.2 km" },
-  { id: "5", name: "Manauara Shopping", address: "Av. Mario Ypiranga, 4390 - Adrianopolis", distance: "3.5 km" },
-  { id: "6", name: "Arena da Amazonia", address: "Av. Constantino Nery, Flores", distance: "4.1 km" },
-];
-
 // ─── Severity data ───
 const SEVERITY_LEVELS = [
   { id: "low", label: "Baixo", dots: 1, color: "#6B7280" },
@@ -223,6 +208,9 @@ export function MapView() {
   const [showAlertDetails, setShowAlertDetails] = useState(false);
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+
+  // Style version – incremented after map.setStyle() finishes loading, to force overlay re-render
+  const [styleVersion, setStyleVersion] = useState(0);
 
   // Click-to-navigate state
   const [clickedCoords, setClickedCoords] = useState<{ lng: number; lat: number } | null>(null);
@@ -296,12 +284,14 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update map style when theme changes
+  // Update map style when theme changes; re-add overlays after style reload
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const newStyle = isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light;
+    // setStyle destroys all layers/sources; listen once to re-render overlays
+    map.once('style.load', () => setStyleVersion((v) => v + 1));
     map.setStyle(newStyle);
   }, [isDark]);
 
@@ -397,13 +387,7 @@ export function MapView() {
       type: "circle",
       source: "risk-zones",
       paint: {
-        "circle-radius": {
-          stops: [
-            [0, 0],
-            [20, ["get", "radius"]],
-          ],
-          base: 2,
-        },
+        "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, 0, 20, ["get", "radius"]],
         "circle-color": ["get", "color"],
         "circle-opacity": 0.28,
         "circle-stroke-width": 3,
@@ -457,7 +441,7 @@ export function MapView() {
 
       incidentMarkersRef.current.set(inc.id, { marker, popup });
     });
-  }, [visibleIncidents, proximityAlert, isDark]);
+  }, [visibleIncidents, proximityAlert, isDark, styleVersion]);
 
   // ═══ Proximity detection ═══
   useEffect(() => {
@@ -1163,7 +1147,7 @@ export function MapView() {
               {/* Loading state */}
               {isLoadingSuggestions && searchQuery.length >= 2 && (
                 <div className="flex items-center justify-center py-8">
-                  <div className="w-8 h-8 border-3 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-[3px] border-gray-400 border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
 
