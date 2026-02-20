@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   IconBell,
   IconBellOff,
@@ -54,6 +54,46 @@ interface NotifItem {
   lng?: number;
 }
 
+// Timestamps fixos — calculados uma única vez no carregamento do módulo
+const COMMUNITY_NOTIFS_BASE: Omit<NotifItem, "read">[] = [
+  {
+    id: "comm-1",
+    title: "Alerta da comunidade",
+    message:
+      "3 pessoas confirmaram o alagamento na Av. Eduardo Ribeiro. Evite a região.",
+    time: Date.now() - 3600000 * 2,
+    type: "community",
+    severity: "high",
+    distance: 0, // recalculado no useMemo
+    lat: -3.121,
+    lng: -60.02,
+  },
+  {
+    id: "comm-2",
+    title: "Zona segura atualizada",
+    message:
+      "A Rua Monsenhor Coutinho agora tem iluminação restaurada, segundo 5 moradores.",
+    time: Date.now() - 3600000 * 4,
+    type: "community",
+    severity: "low",
+    distance: 0,
+    lat: -3.117,
+    lng: -60.024,
+  },
+];
+
+const SYSTEM_NOTIFS_BASE: Omit<NotifItem, "read">[] = [
+  {
+    id: "sys-1",
+    title: "Bem-vindo ao Alerta+",
+    message:
+      "Configure suas preferências de notificação para receber alertas relevantes.",
+    time: Date.now() - 86400000 * 2,
+    type: "system",
+    distance: 0,
+  },
+];
+
 const RADIUS_OPTIONS = [
   { label: "500m", value: 500 },
   { label: "1 km", value: 1000 },
@@ -66,6 +106,12 @@ export function Notifications() {
   const { incidents, userLocation, theme, language, distanceUnit } = useApp();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [selectedRadius, setSelectedRadius] = useState(500);
+  // Ticker: força re-render a cada 30s para atualizar labels de tempo
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   // ─── Build notifications with distance ───
   const allNotifications = useMemo<NotifItem[]>(() => {
@@ -89,47 +135,18 @@ export function Notifications() {
         lng: inc.location.lng,
       }));
 
-    const communityNotifs: NotifItem[] = [
-      {
-        id: "comm-1",
-        title: "Alerta da comunidade",
-        message:
-          "3 pessoas confirmaram o alagamento na Av. Eduardo Ribeiro. Evite a região.",
-        time: Date.now() - 3600000 * 2,
-        type: "community",
-        severity: "high",
-        read: readIds.has("comm-1"),
-        distance: haversineDistance(userLat, userLng, -3.121, -60.02),
-        lat: -3.121,
-        lng: -60.02,
-      },
-      {
-        id: "comm-2",
-        title: "Zona segura atualizada",
-        message:
-          "A Rua Monsenhor Coutinho agora tem iluminação restaurada, segundo 5 moradores.",
-        time: Date.now() - 3600000 * 4,
-        type: "community",
-        severity: "low",
-        read: readIds.has("comm-2"),
-        distance: haversineDistance(userLat, userLng, -3.117, -60.024),
-        lat: -3.117,
-        lng: -60.024,
-      },
-    ];
+    const communityNotifs: NotifItem[] = COMMUNITY_NOTIFS_BASE.map((n) => ({
+      ...n,
+      read: readIds.has(n.id),
+      distance: n.lat != null && n.lng != null
+        ? haversineDistance(userLat, userLng, n.lat, n.lng)
+        : 0,
+    }));
 
-    const systemNotifs: NotifItem[] = [
-      {
-        id: "sys-1",
-        title: "Bem-vindo ao Alerta+",
-        message:
-          "Configure suas preferências de notificação para receber alertas relevantes.",
-        time: Date.now() - 86400000 * 2,
-        type: "system",
-        read: readIds.has("sys-1"),
-        distance: 0,
-      },
-    ];
+    const systemNotifs: NotifItem[] = SYSTEM_NOTIFS_BASE.map((n) => ({
+      ...n,
+      read: readIds.has(n.id),
+    }));
 
     return [...alertNotifs, ...communityNotifs, ...systemNotifs];
   }, [incidents, readIds, userLocation]);
