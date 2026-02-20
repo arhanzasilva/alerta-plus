@@ -405,10 +405,10 @@ export function MapView() {
           base: 2,
         },
         "circle-color": ["get", "color"],
-        "circle-opacity": 0.15,
-        "circle-stroke-width": 2,
+        "circle-opacity": 0.28,
+        "circle-stroke-width": 3,
         "circle-stroke-color": ["get", "color"],
-        "circle-stroke-opacity": 0.5,
+        "circle-stroke-opacity": 0.9,
       },
     });
 
@@ -420,12 +420,12 @@ export function MapView() {
       const el = document.createElement("div");
       el.className = "incident-marker";
       el.style.cssText = `
-        width: 16px;
-        height: 16px;
+        width: 22px;
+        height: 22px;
         background: ${color};
         border: 3px solid white;
         border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35), 0 0 0 4px ${color}33;
         cursor: pointer;
       `;
 
