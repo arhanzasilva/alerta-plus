@@ -277,6 +277,19 @@ export function MapView() {
     });
 
     return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
+      if (clickedMarkerRef.current) {
+        clickedMarkerRef.current.remove();
+        clickedMarkerRef.current = null;
+      }
+      incidentMarkersRef.current.forEach(({ marker, popup }) => {
+        marker.remove();
+        popup.remove();
+      });
+      incidentMarkersRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
