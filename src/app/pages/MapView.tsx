@@ -43,6 +43,7 @@ import {
   IconCurrentLocation,
   IconBarbell,
   IconSchool,
+  IconNavigation,
 } from "@tabler/icons-react";
 
 // Initialize Mapbox token
@@ -223,6 +224,11 @@ export function MapView() {
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
+  // Click-to-navigate state
+  const [clickedCoords, setClickedCoords] = useState<{ lng: number; lat: number } | null>(null);
+  const [clickedAddress, setClickedAddress] = useState<string | null>(null);
+  const [isLoadingClickedAddress, setIsLoadingClickedAddress] = useState(false);
+
   // Alert details form
   const [severity, setSeverity] = useState("high");
   const [description, setDescription] = useState("");
@@ -236,6 +242,7 @@ export function MapView() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const incidentMarkersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup }>>(new Map());
+  const clickedMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   // Visible incidents
   const visibleIncidents = useMemo(
@@ -259,6 +266,13 @@ export function MapView() {
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
 
     mapRef.current = map;
+
+    // Click handler for reverse geocoding / navigate-to-point
+    map.on('click', (e) => {
+      const target = e.originalEvent?.target as HTMLElement;
+      if (target?.closest?.('.mapboxgl-ctrl')) return;
+      setClickedCoords({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    });
 
     return () => {
       map.remove();
@@ -486,6 +500,47 @@ export function MapView() {
     setDescription("");
     toast.success("Alerta enviado com sucesso!");
   }, [selectedAlertType, severity, description, addIncident, userLocation]);
+
+  // ═══ Reverse geocode clicked map location ═══
+  useEffect(() => {
+    const map = mapRef.current;
+
+    // Remove previous click marker
+    if (clickedMarkerRef.current) {
+      clickedMarkerRef.current.remove();
+      clickedMarkerRef.current = null;
+    }
+
+    if (!clickedCoords) {
+      setClickedAddress(null);
+      return;
+    }
+
+    // Add temporary green marker
+    if (map) {
+      const el = document.createElement('div');
+      el.style.cssText = `
+        width: 18px; height: 18px;
+        background: #10b981;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        cursor: pointer;
+      `;
+      clickedMarkerRef.current = new mapboxgl.Marker({ element: el })
+        .setLngLat([clickedCoords.lng, clickedCoords.lat])
+        .addTo(map);
+    }
+
+    // Resolve address
+    setIsLoadingClickedAddress(true);
+    setClickedAddress(null);
+    mapboxService
+      .reverseGeocode(clickedCoords.lng, clickedCoords.lat, language as 'pt' | 'en' | 'es')
+      .then((address) => setClickedAddress(address))
+      .catch(() => setClickedAddress(`${clickedCoords.lat.toFixed(4)}, ${clickedCoords.lng.toFixed(4)}`))
+      .finally(() => setIsLoadingClickedAddress(false));
+  }, [clickedCoords, language]);
 
   const dismissProximityAlert = useCallback(() => {
     if (proximityAlert) {
@@ -958,6 +1013,64 @@ export function MapView() {
           )}
         </div>
       </div>
+
+      {/* ═══ Clicked Location Bar ═══ */}
+      <AnimatePresence>
+        {clickedCoords && (
+          <motion.div
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            className={`absolute bottom-[242px] left-3 right-3 lg:bottom-10 lg:left-auto lg:right-[420px] xl:right-[480px] lg:w-80 ${sheetBg} rounded-2xl p-4 shadow-xl z-20`}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <IconMapPin className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {isLoadingClickedAddress ? (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    <span className={`${sheetTextMuted} text-[13px] font-['Poppins']`}>Obtendo endereço...</span>
+                  </div>
+                ) : (
+                  <p className={`${sheetText} text-[13px] font-medium font-['Poppins'] leading-tight`}>
+                    {clickedAddress || `${clickedCoords.lat.toFixed(4)}, ${clickedCoords.lng.toFixed(4)}`}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setClickedCoords(null)}
+                className={`p-1 ${sheetTextMuted} hover:text-red-500 transition flex-shrink-0`}
+              >
+                <IconX size={15} />
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                if (!clickedAddress) return;
+                const coords = clickedCoords;
+                setClickedCoords(null);
+                navigate("/routes", {
+                  state: {
+                    origin: t("mapview.currentLocation", language),
+                    originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                    destination: clickedAddress,
+                    destinationCoords: { lng: coords.lng, lat: coords.lat },
+                    autoSearch: true,
+                  },
+                });
+              }}
+              disabled={isLoadingClickedAddress || !clickedAddress}
+              className="w-full mt-3 h-10 bg-[#2b7fff] rounded-xl flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-40"
+            >
+              <IconNavigation size={15} className="text-white" />
+              <span className="text-white text-[13px] font-semibold font-['Poppins']">Traçar rota até aqui</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ═══ Fullscreen Search ═══ */}
       <AnimatePresence>

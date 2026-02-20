@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import mapboxgl from "mapbox-gl";
 import {
@@ -33,13 +33,14 @@ import {
   IconBarbell,
   IconSchool,
   IconMapPinFilled,
+  IconCurrentLocation,
 } from "@tabler/icons-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { NavigationMode } from "../components/NavigationMode";
 import { useNavigate, useLocation } from "react-router";
 import { t } from "../context/translations";
-import { mapboxService } from "../lib/mapboxService";
+import { mapboxService, type AddressSuggestion } from "../lib/mapboxService";
 import { MAPBOX_TOKEN } from "../../config/mapbox";
 import { usePlannedRoutes, type PlannedRoute, type PlannedRouteCategory } from "../hooks/usePlannedRoutes";
 import { analyzeRouteSafety, formatSafetyWarnings } from "../lib/routeSafetyAnalyzer";
@@ -96,6 +97,7 @@ export function Routes() {
     incrementRoutesSearched,
     theme,
     language,
+    userLocation,
   } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
@@ -116,6 +118,14 @@ export function Routes() {
   );
   const [selectedRouteIdx, setSelectedRouteIdx] = useState<number | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+
+  // Autocomplete for main search form
+  const [originSuggestions, setOriginSuggestions] = useState<AddressSuggestion[]>([]);
+  const [destSuggestions, setDestSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showOriginSugg, setShowOriginSugg] = useState(false);
+  const [showDestSugg, setShowDestSugg] = useState(false);
+  const [isLoadingOriginSugg, setIsLoadingOriginSugg] = useState(false);
+  const [isLoadingDestSugg, setIsLoadingDestSugg] = useState(false);
 
   // Real routes from Mapbox API
   const [realRoutes, setRealRoutes] = useState<RouteData[] | null>(null);
@@ -140,6 +150,14 @@ export function Routes() {
   const [formDestination, setFormDestination] = useState("");
   const [formTime, setFormTime] = useState("07:30");
   const [formDays, setFormDays] = useState<string[]>(["seg", "ter", "qua", "qui", "sex"]);
+
+  // Autocomplete for planned route form
+  const [formOriginSugg, setFormOriginSugg] = useState<AddressSuggestion[]>([]);
+  const [formDestSugg, setFormDestSugg] = useState<AddressSuggestion[]>([]);
+  const [showFormOriginSugg, setShowFormOriginSugg] = useState(false);
+  const [showFormDestSugg, setShowFormDestSugg] = useState(false);
+  const [isLoadingFormOrigin, setIsLoadingFormOrigin] = useState(false);
+  const [isLoadingFormDest, setIsLoadingFormDest] = useState(false);
 
   // Map ref for route visualization
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -263,6 +281,102 @@ export function Routes() {
     if (days.length === 2 && days.includes("sab") && days.includes("dom")) return t("routes.weekends", language);
     return days.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ");
   };
+
+  // ═══ Debounced autocomplete for origin ═══
+  useEffect(() => {
+    if (!showOriginSugg || !origin.trim() || origin.length < 2 || originCoords) {
+      setOriginSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsLoadingOriginSugg(true);
+      try {
+        const results = await mapboxService.getAddressSuggestions(
+          origin,
+          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+        );
+        setOriginSuggestions(results);
+      } catch {
+        setOriginSuggestions([]);
+      } finally {
+        setIsLoadingOriginSugg(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [origin, showOriginSugg, originCoords, userLocation, language]);
+
+  // ═══ Debounced autocomplete for planned form origin ═══
+  useEffect(() => {
+    if (!showAddPlanned || !showFormOriginSugg || !formOrigin.trim() || formOrigin.length < 2) {
+      setFormOriginSugg([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsLoadingFormOrigin(true);
+      try {
+        const results = await mapboxService.getAddressSuggestions(
+          formOrigin,
+          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+        );
+        setFormOriginSugg(results);
+      } catch {
+        setFormOriginSugg([]);
+      } finally {
+        setIsLoadingFormOrigin(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [formOrigin, showFormOriginSugg, showAddPlanned, userLocation, language]);
+
+  // ═══ Debounced autocomplete for planned form destination ═══
+  useEffect(() => {
+    if (!showAddPlanned || !showFormDestSugg || !formDestination.trim() || formDestination.length < 2) {
+      setFormDestSugg([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsLoadingFormDest(true);
+      try {
+        const results = await mapboxService.getAddressSuggestions(
+          formDestination,
+          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+        );
+        setFormDestSugg(results);
+      } catch {
+        setFormDestSugg([]);
+      } finally {
+        setIsLoadingFormDest(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [formDestination, showFormDestSugg, showAddPlanned, userLocation, language]);
+
+  // ═══ Debounced autocomplete for destination ═══
+  useEffect(() => {
+    if (!showDestSugg || !destination.trim() || destination.length < 2 || destinationCoords) {
+      setDestSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsLoadingDestSugg(true);
+      try {
+        const results = await mapboxService.getAddressSuggestions(
+          destination,
+          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+        );
+        setDestSuggestions(results);
+      } catch {
+        setDestSuggestions([]);
+      } finally {
+        setIsLoadingDestSugg(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [destination, showDestSugg, destinationCoords, userLocation, language]);
 
   /**
    * Busca rotas reais usando a API do Mapbox
@@ -458,9 +572,27 @@ export function Routes() {
     }
   };
 
-  const handleUseCurrentLocation = () => {
-    setOrigin("Condomínio Reserva da Cidade, Cidade Nova 2");
-  };
+  const handleUseCurrentLocation = useCallback(async () => {
+    if (!userLocation) {
+      toast.error('Localização GPS não disponível');
+      return;
+    }
+    setOriginCoords({ lng: userLocation.lng, lat: userLocation.lat });
+    setOrigin('Minha localização');
+    setOriginSuggestions([]);
+    setShowOriginSugg(false);
+    // Reverse geocode to get friendly address
+    try {
+      const address = await mapboxService.reverseGeocode(
+        userLocation.lng,
+        userLocation.lat,
+        language as 'pt' | 'en' | 'es'
+      );
+      setOrigin(address);
+    } catch {
+      // Keep "Minha localização" as fallback
+    }
+  }, [userLocation, language]);
 
   // Use real routes if available, otherwise fallback to mock data
   const routes: RouteData[] = realRoutes || [
@@ -843,6 +975,115 @@ export function Routes() {
       <div className="flex-1 overflow-y-auto p-6 relative z-10 bg-[#aaaaaa1f]">
         {!showResults ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+
+            {/* ========== SEARCH FORM ========== */}
+            <div className={`${cardBg} border ${cardBorder} rounded-xl overflow-visible`}>
+              {/* Origin */}
+              <div className="relative">
+                <div className={`flex items-center gap-3 px-4 py-3.5 border-b ${cardBorder}`}>
+                  <div className="w-2.5 h-2.5 bg-[#2b7fff] rounded-full flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={origin}
+                    placeholder="De onde você vai partir?"
+                    onChange={(e) => { setOrigin(e.target.value); setOriginCoords(null); }}
+                    onFocus={() => setShowOriginSugg(true)}
+                    onBlur={() => setTimeout(() => setShowOriginSugg(false), 150)}
+                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] placeholder:${textSecondary}`}
+                  />
+                  {isLoadingOriginSugg ? (
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  ) : (
+                    <button
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={handleUseCurrentLocation}
+                      className={`p-1 ${textSecondary} hover:text-[#2b7fff] transition flex-shrink-0`}
+                      title="Usar localização atual"
+                    >
+                      <IconCurrentLocation size={16} />
+                    </button>
+                  )}
+                </div>
+                {/* Origin suggestions */}
+                {showOriginSugg && originSuggestions.length > 0 && (
+                  <div className={`absolute top-full left-0 right-0 ${isDark ? "bg-[#1f2937]" : "bg-white"} border ${cardBorder} rounded-b-xl z-50 shadow-xl overflow-hidden`}>
+                    {originSuggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setOrigin(s.address);
+                          setOriginCoords({ lng: s.lng, lat: s.lat });
+                          setShowOriginSugg(false);
+                          setOriginSuggestions([]);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 border-b ${cardBorder} last:border-0 ${isDark ? "hover:bg-gray-700" : "hover:bg-gray-50"} transition text-left`}
+                      >
+                        <IconMapPin size={14} className={textSecondary} />
+                        <div className="min-w-0">
+                          <p className={`${textPrimary} text-xs font-semibold font-['Poppins'] truncate`}>{s.label}</p>
+                          <p className={`${textSecondary} text-[11px] font-['Poppins'] truncate`}>{s.address}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Destination */}
+              <div className="relative">
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-2.5 h-2.5 bg-green-500 rounded-full flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={destination}
+                    placeholder="Para onde você vai?"
+                    onChange={(e) => { setDestination(e.target.value); setDestinationCoords(null); }}
+                    onFocus={() => setShowDestSugg(true)}
+                    onBlur={() => setTimeout(() => setShowDestSugg(false), 150)}
+                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] placeholder:${textSecondary}`}
+                  />
+                  {isLoadingDestSugg && (
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  )}
+                </div>
+                {/* Destination suggestions */}
+                {showDestSugg && destSuggestions.length > 0 && (
+                  <div className={`absolute top-full left-0 right-0 ${isDark ? "bg-[#1f2937]" : "bg-white"} border ${cardBorder} rounded-b-xl z-50 shadow-xl overflow-hidden`}>
+                    {destSuggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setDestination(s.address);
+                          setDestinationCoords({ lng: s.lng, lat: s.lat });
+                          setShowDestSugg(false);
+                          setDestSuggestions([]);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 border-b ${cardBorder} last:border-0 ${isDark ? "hover:bg-gray-700" : "hover:bg-gray-50"} transition text-left`}
+                      >
+                        <IconMapPin size={14} className={textSecondary} />
+                        <div className="min-w-0">
+                          <p className={`${textPrimary} text-xs font-semibold font-['Poppins'] truncate`}>{s.label}</p>
+                          <p className={`${textSecondary} text-[11px] font-['Poppins'] truncate`}>{s.address}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Search button */}
+            <button
+              onClick={handleSearch}
+              disabled={!origin.trim() || !destination.trim()}
+              className="w-full py-3.5 bg-[#2b7fff] text-white rounded-xl font-semibold text-sm active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <IconNavigation className="w-4 h-4" />
+              {t("routes.findSafest", language)}
+            </button>
+
             {/* ========== PLANNED ROUTES SECTION ========== */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -1052,33 +1293,102 @@ export function Routes() {
                       <div>
                         <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Origem *</label>
                         <div className="relative">
-                          <input
-                            type="text"
-                            value={formOrigin}
-                            onChange={(e) => setFormOrigin(e.target.value)}
-                            placeholder="De onde você sai?"
-                            className={`w-full px-4 py-3 ${inputBg} border ${cardBorder} rounded-xl ${textPrimary} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 pr-16`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setFormOrigin("Condomínio Reserva da Cidade, Cidade Nova 2")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-[#2b7fff] rounded-lg text-white text-[10px] active:scale-95 transition"
-                          >
-                            Atual
-                          </button>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formOrigin}
+                              onChange={(e) => setFormOrigin(e.target.value)}
+                              onFocus={() => setShowFormOriginSugg(true)}
+                              onBlur={() => setTimeout(() => setShowFormOriginSugg(false), 150)}
+                              placeholder="De onde você sai?"
+                              className={`w-full px-4 py-3 ${inputBg} border ${cardBorder} rounded-xl ${textPrimary} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 pr-16`}
+                            />
+                            {isLoadingFormOrigin ? (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={async () => {
+                                  if (!userLocation) return;
+                                  setFormOrigin('Minha localização');
+                                  try {
+                                    const addr = await mapboxService.reverseGeocode(userLocation.lng, userLocation.lat, language as 'pt' | 'en' | 'es');
+                                    setFormOrigin(addr);
+                                  } catch { /* keep fallback */ }
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-[#2b7fff] rounded-lg text-white text-[10px] active:scale-95 transition"
+                              >
+                                Atual
+                              </button>
+                            )}
+                          </div>
+                          {showFormOriginSugg && formOriginSugg.length > 0 && (
+                            <div className={`absolute top-full left-0 right-0 ${isDark ? "bg-[#1f2937]" : "bg-white"} border ${cardBorder} rounded-xl mt-1 z-50 shadow-xl overflow-hidden`}>
+                              {formOriginSugg.map((s) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setFormOrigin(s.address);
+                                    setShowFormOriginSugg(false);
+                                    setFormOriginSugg([]);
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-4 py-2.5 border-b ${cardBorder} last:border-0 ${isDark ? "hover:bg-gray-700" : "hover:bg-gray-50"} transition text-left`}
+                                >
+                                  <IconMapPin size={13} className={textSecondary} />
+                                  <div className="min-w-0">
+                                    <p className={`${textPrimary} text-xs font-semibold truncate`}>{s.label}</p>
+                                    <p className={`${textSecondary} text-[11px] truncate`}>{s.address}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Destination */}
                       <div>
                         <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Destino *</label>
-                        <input
-                          type="text"
-                          value={formDestination}
-                          onChange={(e) => setFormDestination(e.target.value)}
-                          placeholder="Para onde você vai?"
-                          className={`w-full px-4 py-3 ${inputBg} border ${cardBorder} rounded-xl ${textPrimary} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={formDestination}
+                            onChange={(e) => setFormDestination(e.target.value)}
+                            onFocus={() => setShowFormDestSugg(true)}
+                            onBlur={() => setTimeout(() => setShowFormDestSugg(false), 150)}
+                            placeholder="Para onde você vai?"
+                            className={`w-full px-4 py-3 ${inputBg} border ${cardBorder} rounded-xl ${textPrimary} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${isLoadingFormDest ? "pr-10" : ""}`}
+                          />
+                          {isLoadingFormDest && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                          )}
+                          {showFormDestSugg && formDestSugg.length > 0 && (
+                            <div className={`absolute top-full left-0 right-0 ${isDark ? "bg-[#1f2937]" : "bg-white"} border ${cardBorder} rounded-xl mt-1 z-50 shadow-xl overflow-hidden`}>
+                              {formDestSugg.map((s) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setFormDestination(s.address);
+                                    setShowFormDestSugg(false);
+                                    setFormDestSugg([]);
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-4 py-2.5 border-b ${cardBorder} last:border-0 ${isDark ? "hover:bg-gray-700" : "hover:bg-gray-50"} transition text-left`}
+                                >
+                                  <IconMapPin size={13} className={textSecondary} />
+                                  <div className="min-w-0">
+                                    <p className={`${textPrimary} text-xs font-semibold truncate`}>{s.label}</p>
+                                    <p className={`${textSecondary} text-[11px] truncate`}>{s.address}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Time */}
