@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { useApp } from "../context/AppContext";
@@ -33,18 +33,30 @@ export function Login() {
   const [loginMode, setLoginMode] = useState<"email" | "google" | null>(null);
   const [error, setError] = useState("");
 
+  const userProfileRef = useRef(userProfile);
+  userProfileRef.current = userProfile;
+  const googleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (googleTimerRef.current) clearTimeout(googleTimerRef.current);
+      if (emailTimerRef.current) clearTimeout(emailTimerRef.current);
+    };
+  }, []);
+
   const handleGoogleLogin = () => {
     if (isLoading) return;
     setError("");
     setLoginMode("google");
     setIsLoading(true);
     const gEmail = "usuario@gmail.com";
-    setTimeout(() => {
-      if (userProfile) {
+    googleTimerRef.current = setTimeout(() => {
+      if (userProfileRef.current) {
         updateUserProfile({ email: gEmail, loginMethod: "google" });
       } else {
         setUserProfile({
-          name: "Usuario Google",
+          name: t("login.googleUserName", language),
           email: gEmail,
           neighborhood: "",
           transportMode: "pedestrian",
@@ -64,7 +76,7 @@ export function Login() {
       }
       setIsLoading(false);
       toast.success(t("login.successGoogle", language));
-      navigate(-1);
+      navigate("/map", { replace: true });
     }, 1500);
   };
 
@@ -83,8 +95,8 @@ export function Login() {
 
     setLoginMode("email");
     setIsLoading(true);
-    setTimeout(() => {
-      if (userProfile) {
+    emailTimerRef.current = setTimeout(() => {
+      if (userProfileRef.current) {
         updateUserProfile({
           email: email.trim(),
           name: email.split("@")[0],
@@ -112,7 +124,7 @@ export function Login() {
       }
       setIsLoading(false);
       toast.success(t("login.successEmail", language));
-      navigate(-1);
+      navigate("/map", { replace: true });
     }, 1500);
   };
 
@@ -123,7 +135,7 @@ export function Login() {
         className={`relative z-10 flex items-center px-4 pb-3 pt-[env(safe-area-inset-top,0px)] min-h-[60px] border-b ${tc.border} ${tc.bgCard}`}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/map", { replace: true })}
           className={`w-9 h-9 flex items-center justify-center rounded-full ${tc.activeRow}`}
         >
           <IconArrowLeft className={`w-5 h-5 ${tc.iconColor}`} />

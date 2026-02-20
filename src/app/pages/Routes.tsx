@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import mapboxgl from "mapbox-gl";
 import {
@@ -162,6 +162,7 @@ export function Routes() {
   // Map ref for route visualization
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
+  const routeMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   // Handle side effects from navigation state (clear history, track search)
   useEffect(() => {
@@ -252,16 +253,12 @@ export function Routes() {
     resetForm();
   };
 
-  const togglePlannedActive = (id: string) => {
-    togglePlannedActiveHook(id);
-  };
-
   const deletePlannedRouteLocal = (id: string) => {
     deletePlannedRoute(id);
     toast(t("routes.plannedRemoved", language));
   };
 
-  const usePlannedRoute = (route: PlannedRoute) => {
+  const handleUsePlannedRoute = (route: PlannedRoute) => {
     setOrigin(route.origin);
     setDestination(route.destination);
     setShowResults(true);
@@ -396,11 +393,11 @@ export function Routes() {
       if (!originLngLat) {
         const originResults = await mapboxService.getAddressSuggestions(
           originText,
-          MANAUS_CENTER.lng ? [MANAUS_CENTER.lng, MANAUS_CENTER.lat] : undefined,
+          [MANAUS_CENTER.lng, MANAUS_CENTER.lat],
           { limit: 1, language: language as 'pt' | 'en' | 'es' }
         );
         if (originResults.length === 0) {
-          toast.error('Origem não encontrada');
+          toast.error(t('routes.originNotFound', language));
           setIsLoadingRoutes(false);
           return;
         }
@@ -417,7 +414,7 @@ export function Routes() {
           { limit: 1, language: language as 'pt' | 'en' | 'es' }
         );
         if (destResults.length === 0) {
-          toast.error('Destino não encontrado');
+          toast.error(t('routes.destNotFound', language));
           setIsLoadingRoutes(false);
           return;
         }
@@ -439,7 +436,7 @@ export function Routes() {
       });
 
       if (!routeResponse) {
-        toast.error('Erro ao calcular rotas');
+        toast.error(t('routes.calcError', language));
         setIsLoadingRoutes(false);
         return;
       }
@@ -508,15 +505,15 @@ export function Routes() {
       });
 
       if (formattedRoutes.length === 0) {
-        toast.error('Nenhuma rota encontrada');
+        toast.error(t('routes.noRoutes', language));
       } else {
         setRealRoutes(formattedRoutes);
         setShowResults(true);
-        toast.success(`${formattedRoutes.length} rotas encontradas`);
+        toast.success(`${formattedRoutes.length} ${t('routes.routesFound', language)}`);
       }
     } catch (error) {
       console.error('Erro ao buscar rotas:', error);
-      toast.error('Erro ao calcular rotas');
+      toast.error(t('routes.calcError', language));
     } finally {
       setIsLoadingRoutes(false);
     }
@@ -548,14 +545,14 @@ export function Routes() {
         instruction,
         distance: mapboxService.formatDistance(step.distance),
         icon,
-        street: `Passo ${idx + 1}`,
+        street: `${t("routes.step", language)} ${idx + 1}`,
         warning: warning || undefined,
       };
     });
 
     // Add arrival step
     steps.push({
-      instruction: "Chegou ao destino",
+      instruction: t("routes.arrivedDest", language),
       distance: "—",
       icon: "arrive",
       street: destinationText || "Destino",
@@ -574,11 +571,11 @@ export function Routes() {
 
   const handleUseCurrentLocation = useCallback(async () => {
     if (!userLocation) {
-      toast.error('Localização GPS não disponível');
+      toast.error(t('routes.noGps', language));
       return;
     }
     setOriginCoords({ lng: userLocation.lng, lat: userLocation.lat });
-    setOrigin('Minha localização');
+    setOrigin(t('routes.myLocation', language));
     setOriginSuggestions([]);
     setShowOriginSugg(false);
     // Reverse geocode to get friendly address
@@ -595,7 +592,7 @@ export function Routes() {
   }, [userLocation, language]);
 
   // Use real routes if available, otherwise fallback to mock data
-  const routes: RouteData[] = realRoutes || [
+  const routes = useMemo<RouteData[]>(() => realRoutes || [
     {
       name: t("routes.safestRoute", language),
       distance: "3.2 km",
@@ -653,7 +650,7 @@ export function Routes() {
         { instruction: "Chegou ao destino", distance: "—", icon: "arrive", street: destination || "Destino" },
       ],
     },
-  ];
+  ], [realRoutes, language, destination]);
 
   // Initialize map and draw route geometry when a route is selected
   useEffect(() => {
@@ -686,8 +683,8 @@ export function Routes() {
       if (map.getSource('route')) map.removeSource('route');
 
       // Clear existing markers
-      const markers = document.querySelectorAll('.mapboxgl-marker');
-      markers.forEach(marker => marker.remove());
+      routeMarkersRef.current.forEach(m => m.remove());
+      routeMarkersRef.current = [];
 
       if (!route.geometry) return;
 
@@ -739,18 +736,20 @@ export function Routes() {
 
       // Add origin marker
       if (originCoords) {
-        new mapboxgl.Marker({ color: '#2b7fff' })
+        const originMarker = new mapboxgl.Marker({ color: '#2b7fff' })
           .setLngLat([originCoords.lng, originCoords.lat])
           .setPopup(new mapboxgl.Popup().setHTML(`<strong>Origem</strong><br/>${origin}`))
           .addTo(map);
+        routeMarkersRef.current.push(originMarker);
       }
 
       // Add destination marker
       if (destinationCoords) {
-        new mapboxgl.Marker({ color: '#10b981' })
+        const destMarker = new mapboxgl.Marker({ color: '#10b981' })
           .setLngLat([destinationCoords.lng, destinationCoords.lat])
           .setPopup(new mapboxgl.Popup().setHTML(`<strong>Destino</strong><br/>${destination}`))
           .addTo(map);
+        routeMarkersRef.current.push(destMarker);
       }
 
       // Fit bounds to show entire route
@@ -889,9 +888,9 @@ export function Routes() {
 
           <div className="grid grid-cols-3 gap-2 mb-5">
             {[
-              { val: route.distance, label: "Distância", icon: IconRuler },
-              { val: route.time, label: "Tempo", icon: IconClock },
-              { val: `${route.safetyScore}%`, label: "Segurança", icon: IconShield },
+              { val: route.distance, label: t("routes.distance", language), icon: IconRuler },
+              { val: route.time, label: t("routes.time", language), icon: IconClock },
+              { val: `${route.safetyScore}%`, label: t("routes.safety", language), icon: IconShield },
             ].map((s) => {
               const StatIcon = s.icon;
               return (
@@ -907,19 +906,19 @@ export function Routes() {
           {route.warnings > 0 ? (
             <div className={`flex items-center gap-3 px-4 py-3 ${isDark ? "bg-orange-500/10 border-orange-500/20" : "bg-orange-50/80 border-orange-100"} border rounded-xl mb-5`}>
               <IconAlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
-              <span className={`${textSecondary} text-sm`}>{route.warnings} {route.warnings === 1 ? "alerta" : "alertas"} nesta rota</span>
+              <span className={`${textSecondary} text-sm`}>{route.warnings} {route.warnings === 1 ? t("routes.alert", language) : t("routes.alerts", language)} {t("routes.onThisRoute", language)}</span>
             </div>
           ) : (
             <div className={`flex items-center gap-3 px-4 py-3 ${isDark ? "bg-green-500/10 border-green-500/20" : "bg-green-50/80 border-green-100"} border rounded-xl mb-5`}>
               <IconCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
-              <span className={`${textSecondary} text-sm`}>Nenhum alerta conhecido</span>
+              <span className={`${textSecondary} text-sm`}>{t("routes.noKnownAlerts", language)}</span>
             </div>
           )}
 
           <div className="mb-6">
             <h3 className={`${textPrimary} font-bold mb-4 flex items-center gap-2`}>
               <IconCornerDownRight className="w-5 h-5" />
-              Passo a passo
+              {t("routes.stepByStep", language)}
             </h3>
             <div className={`${cardBg} border ${cardBorder} rounded-2xl overflow-hidden`}>
               {route.steps.map((step, idx) => {
@@ -988,11 +987,11 @@ export function Routes() {
                   <input
                     type="text"
                     value={origin}
-                    placeholder="De onde você vai partir?"
+                    placeholder={t("routes.originPlaceholder", language)}
                     onChange={(e) => { setOrigin(e.target.value); setOriginCoords(null); }}
                     onFocus={() => setShowOriginSugg(true)}
                     onBlur={() => setTimeout(() => setShowOriginSugg(false), 150)}
-                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] placeholder:${textSecondary}`}
+                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] ${isDark ? "placeholder:text-gray-500" : "placeholder:text-gray-400"}`}
                   />
                   {isLoadingOriginSugg ? (
                     <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -1040,11 +1039,11 @@ export function Routes() {
                   <input
                     type="text"
                     value={destination}
-                    placeholder="Para onde você vai?"
+                    placeholder={t("routes.destPlaceholder", language)}
                     onChange={(e) => { setDestination(e.target.value); setDestinationCoords(null); }}
                     onFocus={() => setShowDestSugg(true)}
                     onBlur={() => setTimeout(() => setShowDestSugg(false), 150)}
-                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] placeholder:${textSecondary}`}
+                    className={`flex-1 bg-transparent ${textPrimary} text-sm focus:outline-none font-['Poppins'] ${isDark ? "placeholder:text-gray-500" : "placeholder:text-gray-400"}`}
                   />
                   {isLoadingDestSugg && (
                     <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -1099,7 +1098,7 @@ export function Routes() {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2b7fff] rounded-lg text-white text-xs active:scale-95 transition"
                 >
                   <IconPlus className="w-3.5 h-3.5" />
-                  Adicionar
+                  {t("routes.addPlanned", language)}
                 </button>
               </div>
 
@@ -1109,9 +1108,9 @@ export function Routes() {
                     <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-3">
                       <IconRepeat className={`w-5 h-5 ${textSecondary}`} />
                     </div>
-                    <p className={`${textPrimary} text-sm font-medium mb-1`}>Nenhuma rota planejada</p>
+                    <p className={`${textPrimary} text-sm font-medium mb-1`}>{t("routes.noPlannedRoutes", language)}</p>
                     <p className={`${textSecondary} text-xs leading-relaxed`}>
-                      Adicione rotas do dia a dia como trabalho, casa ou academia e programe horários.
+                      {t("routes.addPlannedDesc", language)}
                     </p>
                   </div>
                 </div>
@@ -1178,11 +1177,11 @@ export function Routes() {
                           {/* Action buttons */}
                           <div className={`flex items-center gap-2 mt-3 pt-3 border-t ${cardBorder}`}>
                             <button
-                              onClick={() => usePlannedRoute(planned)}
+                              onClick={() => handleUsePlannedRoute(planned)}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-[#2b7fff] rounded-lg text-white text-xs active:scale-95 transition"
                             >
                               <IconPlayerPlay className="w-3.5 h-3.5" />
-                              Usar rota
+                              {t("routes.useRoute", language)}
                             </button>
                             <button
                               onClick={() => openEditPlanned(planned)}
@@ -1191,7 +1190,7 @@ export function Routes() {
                               <IconPencil className={`w-3.5 h-3.5 ${textSecondary}`} />
                             </button>
                             <button
-                              onClick={() => togglePlannedActive(planned.id)}
+                              onClick={() => togglePlannedActiveHook(planned.id)}
                               className={`w-9 h-9 rounded-lg flex items-center justify-center active:scale-90 transition ${
                                 planned.isActive
                                   ? "bg-emerald-50 hover:bg-emerald-100"
@@ -1240,7 +1239,7 @@ export function Routes() {
                     {/* Header */}
                     <div className={`flex items-center justify-between px-5 py-3 border-b ${cardBorder}`}>
                       <h2 className={`${textPrimary} text-[17px] font-bold font-['Poppins']`}>
-                        {editingPlanned ? "Editar rota" : "Nova rota planejada"}
+                        {editingPlanned ? t("routes.editRoute", language) : t("routes.newPlanned", language)}
                       </h2>
                       <button
                         onClick={() => { setShowAddPlanned(false); resetForm(); }}
@@ -1254,7 +1253,7 @@ export function Routes() {
                     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                       {/* Name */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Nome da rota *</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.routeName", language)} *</label>
                         <input
                           type="text"
                           value={formName}
@@ -1266,7 +1265,7 @@ export function Routes() {
 
                       {/* Category selector */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Categoria</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.category", language)}</label>
                         <div className="grid grid-cols-5 gap-2">
                           {(Object.entries(CATEGORY_CONFIG) as [PlannedRouteCategory, typeof CATEGORY_CONFIG["home"]][]).map(([key, config]) => {
                             const CIcon = config.icon;
@@ -1294,7 +1293,7 @@ export function Routes() {
 
                       {/* Origin */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Origem *</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.from", language)} *</label>
                         <div className="relative">
                           <div className="relative">
                             <input
@@ -1354,7 +1353,7 @@ export function Routes() {
 
                       {/* Destination */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Destino *</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.to", language)} *</label>
                         <div className="relative">
                           <input
                             type="text"
@@ -1396,7 +1395,7 @@ export function Routes() {
 
                       {/* Time */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Horário programado</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.scheduledTime", language)}</label>
                         <div className="relative">
                           <IconClock className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${textSecondary}`} />
                           <input
@@ -1410,7 +1409,7 @@ export function Routes() {
 
                       {/* Days of week */}
                       <div>
-                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>Dias da semana</label>
+                        <label className={`block ${textSecondary} text-xs mb-1.5 font-medium`}>{t("routes.daysOfWeek", language)}</label>
                         <div className="flex gap-2">
                           {DAYS_OF_WEEK.map((day, dIdx) => {
                             const isSelected = formDays.includes(day.key);
@@ -1441,7 +1440,7 @@ export function Routes() {
                                 : "bg-gray-100 text-gray-400"
                             }`}
                           >
-                            Dias úteis
+                            {t("routes.weekdays", language)}
                           </button>
                           <button
                             type="button"
@@ -1452,7 +1451,7 @@ export function Routes() {
                                 : "bg-gray-100 text-gray-400"
                             }`}
                           >
-                            Fim de semana
+                            {t("routes.weekends", language)}
                           </button>
                           <button
                             type="button"
@@ -1463,7 +1462,7 @@ export function Routes() {
                                 : "bg-gray-100 text-gray-400"
                             }`}
                           >
-                            Todos
+                            {t("routes.all", language)}
                           </button>
                         </div>
                       </div>
@@ -1477,7 +1476,7 @@ export function Routes() {
                         className="w-full bg-[#2b7fff] text-white py-3.5 rounded-xl text-sm font-medium active:scale-[0.98] transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <IconCheck className="w-4 h-4" />
-                        {editingPlanned ? "Salvar alterações" : "Criar rota planejada"}
+                        {editingPlanned ? t("routes.saveChanges", language) : t("routes.createPlanned", language)}
                       </button>
                     </div>
                   </motion.div>
@@ -1508,7 +1507,7 @@ export function Routes() {
                           </div>
                         </div>
                         <button
-                          onClick={() => { removeFavoriteRoute(fav.id); toast("Rota removida dos favoritos"); }}
+                          onClick={() => { removeFavoriteRoute(fav.id); toast(t("routes.removedFavorite", language)); }}
                           className={`w-8 h-8 rounded-lg flex items-center justify-center ${theme === "dark" ? "bg-white/[0.06] hover:bg-white/10" : "bg-gray-50 hover:bg-gray-100"} active:scale-90 transition`}
                         >
                           <IconTrash className="w-3.5 h-3.5 text-red-400" />
@@ -1525,12 +1524,12 @@ export function Routes() {
             <div className={`${cardBg} border ${cardBorder} p-3.5 rounded-xl`}>
               <div className="flex items-center gap-3 mb-2.5">
                 <div className="w-2.5 h-2.5 bg-[#2b7fff] rounded-full" />
-                <div className={`text-sm ${textSecondary}`}><strong className={textPrimary}>De:</strong> {origin}</div>
+                <div className={`text-sm ${textSecondary}`}><strong className={textPrimary}>{t("routes.from", language)}:</strong> {origin}</div>
               </div>
               <div className={`border-t ${cardBorder} my-0`} />
               <div className="flex items-center gap-3 mt-2.5">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full" />
-                <div className={`text-sm ${textSecondary}`}><strong className={textPrimary}>Para:</strong> {destination}</div>
+                <div className={`text-sm ${textSecondary}`}><strong className={textPrimary}>{t("routes.to", language)}:</strong> {destination}</div>
               </div>
             </div>
 
@@ -1538,8 +1537,8 @@ export function Routes() {
             {isLoadingRoutes && (
               <div className={`${cardBg} border ${cardBorder} p-8 rounded-2xl flex flex-col items-center justify-center gap-3`}>
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className={`${textPrimary} text-sm`}>Calculando rotas...</p>
-                <p className={`${textSecondary} text-xs`}>Buscando as melhores opções</p>
+                <p className={`${textPrimary} text-sm`}>{t("routes.calculating", language)}</p>
+                <p className={`${textSecondary} text-xs`}>{t("routes.searchingOptions", language)}</p>
               </div>
             )}
 
@@ -1560,17 +1559,17 @@ export function Routes() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
-                      {idx === 0 && <div className="bg-green-500/10 text-green-600 text-[11px] px-2.5 py-1 rounded-full">Recomendada</div>}
+                      {idx === 0 && <div className="bg-green-500/10 text-green-600 text-[11px] px-2.5 py-1 rounded-full">{t("routes.recommended", language)}</div>}
                       {route.warnings > 0 && (
                         <div className="flex items-center gap-1 bg-orange-500/10 text-orange-500 text-[11px] px-2.5 py-1 rounded-full">
                           <IconAlertTriangle className="w-3 h-3" />
-                          {route.warnings} {route.warnings === 1 ? "alerta" : "alertas"}
+                          {route.warnings} {route.warnings === 1 ? t("routes.alert", language) : t("routes.alerts", language)}
                         </div>
                       )}
                       {route.warnings === 0 && idx !== 0 && (
                         <div className="flex items-center gap-1 bg-green-500/10 text-green-600 text-[11px] px-2.5 py-1 rounded-full">
                           <IconCheck className="w-3 h-3" />
-                          Seguro
+                          {t("routes.safe", language)}
                         </div>
                       )}
                     </div>
@@ -1578,9 +1577,9 @@ export function Routes() {
 
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {[
-                      { val: route.distance, label: "Distância", icon: IconRuler },
-                      { val: route.time, label: "Tempo", icon: IconClock },
-                      { val: `${route.safetyScore}%`, label: "Segurança", icon: IconShield },
+                      { val: route.distance, label: t("routes.distance", language), icon: IconRuler },
+                      { val: route.time, label: t("routes.time", language), icon: IconClock },
+                      { val: `${route.safetyScore}%`, label: t("routes.safety", language), icon: IconShield },
                     ].map((s) => {
                       const StatIcon = s.icon;
                       return (

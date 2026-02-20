@@ -180,7 +180,7 @@ interface ProximityInfo {
 }
 
 export function MapView() {
-  const { mapLayers, toggleMapLayer, addIncident, userLocation, incidents, theme, language, distanceUnit } = useApp();
+  const { mapLayers, toggleMapLayer, addIncident, userLocation, incidents, theme, language, distanceUnit, userProfile } = useApp();
   const isDark = theme === "dark";
   const navigate = useNavigate();
   const { history, addToHistory, removeFromHistory, clearHistory } = useSearchHistory();
@@ -414,9 +414,9 @@ export function MapView() {
       `;
 
       const severityLabel =
-        inc.severity === "critical" ? "Critico" :
-        inc.severity === "high" ? "Alto" :
-        inc.severity === "medium" ? "Medio" : "Baixo";
+        inc.severity === "critical" ? t("severity.critical", language) :
+        inc.severity === "high" ? t("severity.high", language) :
+        inc.severity === "medium" ? t("severity.medium", language) : t("severity.low", language);
 
       // Create popup
       const popup = new mapboxgl.Popup({
@@ -430,7 +430,7 @@ export function MapView() {
         `<div style="display:flex;align-items:center;gap:6px">` +
         `<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>` +
         `<span style="font-size:10px;font-weight:500;color:${color}">${severityLabel}</span>` +
-        `<span style="font-size:10px;color:#9ca3af;margin-left:4px">${inc.confirmations} confirmacoes</span>` +
+        `<span style="font-size:10px;color:#9ca3af;margin-left:4px">${inc.confirmations} ${t("mapview.confirmations", language)}</span>` +
         `</div></div>`
       );
 
@@ -441,7 +441,7 @@ export function MapView() {
 
       incidentMarkersRef.current.set(inc.id, { marker, popup });
     });
-  }, [visibleIncidents, proximityAlert, isDark, styleVersion]);
+  }, [visibleIncidents, proximityAlert, isDark, styleVersion, language]);
 
   // ═══ Proximity detection ═══
   useEffect(() => {
@@ -495,17 +495,17 @@ export function MapView() {
       location: {
         lat: userLocation?.lat || -3.119,
         lng: userLocation?.lng || -60.021,
-        address: "Proximo a sua localizacao",
+        address: t("mapview.nearYourLocation", language),
       },
       description: description || undefined,
-      reportedBy: "Usuario",
+      reportedBy: userProfile?.name || t("mapview.anonymous", language),
     });
     setShowAlertDetails(false);
     setSelectedAlertType(null);
     setSeverity("high");
     setDescription("");
-    toast.success("Alerta enviado com sucesso!");
-  }, [selectedAlertType, severity, description, addIncident, userLocation]);
+    toast.success(t("mapview.alertSent", language));
+  }, [selectedAlertType, severity, description, addIncident, userLocation, language, userProfile]);
 
   // ═══ Reverse geocode clicked map location ═══
   useEffect(() => {
@@ -957,7 +957,7 @@ export function MapView() {
                   onClick={clearHistory}
                   className={`${sheetTextMuted} text-[11px] font-medium hover:text-red-500 transition`}
                 >
-                  Limpar
+                  {t("mapview.clear", language)}
                 </button>
               </div>
               {history.slice(0, 5).map((loc) => {
@@ -1009,10 +1009,10 @@ export function MapView() {
               <div className="text-center py-6">
                 <IconClock className={`w-10 h-10 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
                 <p className={`${sheetTextMuted} text-[13px]`}>
-                  Nenhuma busca recente
+                  {t("mapview.noRecents", language)}
                 </p>
                 <p className={`${sheetTextMuted} text-[11px] mt-1`}>
-                  Suas buscas aparecerão aqui
+                  {t("mapview.recentsHelp", language)}
                 </p>
               </div>
             </>
@@ -1038,7 +1038,7 @@ export function MapView() {
                 {isLoadingClickedAddress ? (
                   <div className="flex items-center gap-2 py-1">
                     <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                    <span className={`${sheetTextMuted} text-[13px] font-['Poppins']`}>Obtendo endereço...</span>
+                    <span className={`${sheetTextMuted} text-[13px] font-['Poppins']`}>{t("mapview.fetchingAddress", language)}</span>
                   </div>
                 ) : (
                   <p className={`${sheetText} text-[13px] font-medium font-['Poppins'] leading-tight`}>
@@ -1072,7 +1072,7 @@ export function MapView() {
               className="w-full mt-3 h-10 bg-[#2b7fff] rounded-xl flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-40"
             >
               <IconNavigation size={15} className="text-white" />
-              <span className="text-white text-[13px] font-semibold font-['Poppins']">Traçar rota até aqui</span>
+              <span className="text-white text-[13px] font-semibold font-['Poppins']">{t("mapview.navigateHere", language)}</span>
             </button>
           </motion.div>
         )}
@@ -1156,10 +1156,10 @@ export function MapView() {
                 <div className="text-center py-8">
                   <IconMapPin className={`w-12 h-12 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
                   <p className={`${sheetTextMuted} text-[14px]`}>
-                    Nenhum resultado encontrado
+                    {t("mapview.noResults", language)}
                   </p>
                   <p className={`${sheetTextMuted} text-[12px] mt-1`}>
-                    Tente buscar por endereço, bairro ou ponto de referência
+                    {t("mapview.searchTip", language)}
                   </p>
                 </div>
               )}
@@ -1215,13 +1215,13 @@ export function MapView() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[13px] font-semibold font-['Poppins']`}>
-                      Buscas recentes
+                      {t("mapview.recents", language)}
                     </p>
                     <button
                       onClick={clearHistory}
                       className={`${sheetTextMuted} text-[12px] font-medium hover:text-red-500 transition`}
                     >
-                      Limpar
+                      {t("mapview.clear", language)}
                     </button>
                   </div>
 
@@ -1285,10 +1285,10 @@ export function MapView() {
                 <div className="text-center py-8">
                   <IconSearch className={`w-12 h-12 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
                   <p className={`${sheetTextMuted} text-[14px]`}>
-                    Digite para buscar endereços
+                    {t("mapview.typeToSearch", language)}
                   </p>
                   <p className={`${sheetTextMuted} text-[12px] mt-1`}>
-                    Ex: Teatro Amazonas, Shopping, Av Constantino Nery
+                    {t("mapview.searchExamples", language)}
                   </p>
                 </div>
               )}

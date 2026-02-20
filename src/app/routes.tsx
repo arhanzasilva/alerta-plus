@@ -31,6 +31,7 @@ export const router = createBrowserRouter([
       { path: "register", Component: Register },
       { path: "help", Component: HelpFeedback },
       { path: "help-history", Component: HelpHistory },
+      { path: "*", element: <Navigate to="/map" replace /> },
     ],
   },
 ]);

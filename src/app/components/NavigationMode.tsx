@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   IconArrowUp,
@@ -210,8 +210,18 @@ export function NavigationMode({
     [stepDistances, totalDistanceMeters]
   );
 
+  // Refs for stale closure values in GPS watchPosition callback
+  const currentStepIdxRef = useRef(currentStepIdx);
+  currentStepIdxRef.current = currentStepIdx;
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+  const stepDistancesRef = useRef(stepDistances);
+  stepDistancesRef.current = stepDistances;
+  const totalStepDistanceRef = useRef(totalStepDistance);
+  totalStepDistanceRef.current = totalStepDistance;
+
   // Calculate how much distance has been covered
-  const coveredDistance = useCallback(() => {
+  const coveredDistance = useMemo(() => {
     let covered = 0;
     for (let i = 0; i < currentStepIdx; i++) {
       covered += stepDistances[i];
@@ -220,8 +230,8 @@ export function NavigationMode({
     return covered;
   }, [currentStepIdx, stepProgress, stepDistances]);
 
-  const remainingDistance = Math.max(0, totalStepDistance - coveredDistance());
-  const overallProgress = coveredDistance() / totalStepDistance;
+  const remainingDistance = Math.max(0, totalStepDistance - coveredDistance);
+  const overallProgress = coveredDistance / totalStepDistance;
   const remainingTimeSeconds = Math.max(0, totalTimeSeconds * (1 - overallProgress));
 
   // Reset dismissed warnings when step changes
@@ -325,7 +335,13 @@ export function NavigationMode({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [mapCenter, route.geometry, isDark]);
+  }, [mapCenter, route.geometry]);
+
+  // Sync map style when theme changes
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/navigation-day-v1');
+  }, [isDark]);
 
   // GPS tracking
   useEffect(() => {
@@ -383,8 +399,8 @@ export function NavigationMode({
 
           // Find the coordinate for current step endpoint
           let stepEndIdx = 0;
-          for (let i = 0; i <= currentStepIdx; i++) {
-            stepEndIdx += Math.max(1, Math.floor((stepDistances[i] / totalStepDistance) * coords.length));
+          for (let i = 0; i <= currentStepIdxRef.current; i++) {
+            stepEndIdx += Math.max(1, Math.floor((stepDistancesRef.current[i] / totalStepDistanceRef.current) * coords.length));
           }
           stepEndIdx = Math.min(stepEndIdx, coords.length - 1);
 
@@ -397,26 +413,25 @@ export function NavigationMode({
           );
 
           // If within 20m of step end, advance to next step
-          if (distToStepEnd < 20 && currentStepIdx < route.steps.length - 1) {
+          if (distToStepEnd < 20 && currentStepIdxRef.current < route.steps.length - 1) {
             setCurrentStepIdx(prev => prev + 1);
             setStepProgress(0);
 
-            if (!isMuted) {
+            if (!isMutedRef.current) {
               // Voice notification (optional)
-              const nextStep = route.steps[currentStepIdx + 1];
+              const nextStep = route.steps[currentStepIdxRef.current + 1];
               if (nextStep && 'speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(nextStep.instruction);
                 utterance.lang = 'pt-BR';
                 window.speechSynthesis.speak(utterance);
               }
             }
-          } else if (currentStepIdx === route.steps.length - 1 && distToStepEnd < 15) {
+          } else if (currentStepIdxRef.current === route.steps.length - 1 && distToStepEnd < 15) {
             // Arrived at destination
             setHasArrived(true);
           } else {
             // Update progress within current step
-            const stepStartIdx = stepEndIdx - Math.floor((stepDistances[currentStepIdx] / totalStepDistance) * coords.length);
-            const stepLength = stepDistances[currentStepIdx];
+            const stepLength = stepDistancesRef.current[currentStepIdxRef.current];
             const progress = Math.max(0, Math.min(1, 1 - (distToStepEnd / stepLength)));
             setStepProgress(progress);
           }
@@ -450,7 +465,7 @@ export function NavigationMode({
         geoWatchIdRef.current = null;
       }
     };
-  }, [useGPS, isPaused, hasArrived, currentStepIdx, route.geometry, route.steps, isMuted, stepDistances, totalStepDistance]);
+  }, [useGPS, isPaused, hasArrived, route.geometry, route.steps]);
 
   // Simulate navigation progress (fallback when GPS unavailable)
   useEffect(() => {
@@ -537,7 +552,7 @@ export function NavigationMode({
               <IconFlag className="w-10 h-10 text-white" />
             </motion.div>
             <h2 className={`text-2xl font-bold ${isDark ? "text-white" : "text-[#101828]"} mb-2 font-['Poppins']`}>
-              Você chegou!
+              {t("navmode.arrived", language)}
             </h2>
             <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[15px] font-['Poppins'] mb-2`}>
               {destination}
@@ -545,24 +560,24 @@ export function NavigationMode({
             <div className="flex items-center justify-center gap-4 mb-6 mt-4">
               <div className="text-center">
                 <p className={`${isDark ? "text-white" : "text-[#101828]"} text-xl font-bold font-['Poppins']`}>{route.distance}</p>
-                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>Percorridos</p>
+                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>{t("navmode.covered", language)}</p>
               </div>
               <div className={`w-px h-10 ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
               <div className="text-center">
                 <p className={`${isDark ? "text-white" : "text-[#101828]"} text-xl font-bold font-['Poppins']`}>{route.time}</p>
-                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>Duração</p>
+                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>{t("navmode.duration", language)}</p>
               </div>
               <div className={`w-px h-10 ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
               <div className="text-center">
                 <p className={`${isDark ? "text-white" : "text-[#101828]"} text-xl font-bold font-['Poppins']`}>{route.safetyScore}%</p>
-                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>Segurança</p>
+                <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>{t("routes.safety", language)}</p>
               </div>
             </div>
             <button
               onClick={onClose}
               className="w-full bg-[#0a2540] text-white py-4 rounded-2xl font-bold text-[16px] font-['Poppins'] active:scale-95 transition"
             >
-              Finalizar
+              {t("navmode.endNavigation", language)}
             </button>
           </motion.div>
         </motion.div>
@@ -661,9 +676,9 @@ export function NavigationMode({
 
           {/* Next turn preview */}
           {nextStep && (
-            <div className="px-4 py-2.5 bg-white/8 border-t border-white/10 flex items-center gap-3">
+            <div className="px-4 py-2.5 bg-white/[8%] border-t border-white/10 flex items-center gap-3">
               <span className="text-white/40 text-[12px] font-['Poppins'] flex-shrink-0">
-                Depois
+                {t("navmode.then", language)}
               </span>
               {(() => {
                 const NextIcon = getStepIcon(nextStep.icon);
@@ -694,7 +709,7 @@ export function NavigationMode({
                 <IconAlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-semibold font-['Poppins'] leading-tight">
-                    Atenção neste trecho
+                    {t("navmode.cautionHere", language)}
                   </p>
                   <p className="text-white/90 text-[12px] font-['Poppins'] leading-tight mt-0.5">
                     {currentStep.warning}
@@ -725,10 +740,10 @@ export function NavigationMode({
                 <IconAlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-semibold font-['Poppins'] leading-tight">
-                    Você saiu da rota
+                    {t("navmode.offRoute", language)}
                   </p>
                   <p className="text-white/90 text-[12px] font-['Poppins'] leading-tight mt-0.5">
-                    Retorne para a rota segura o mais rápido possível
+                    {t("navmode.returnToRoute", language)}
                   </p>
                 </div>
                 <button
@@ -813,7 +828,7 @@ export function NavigationMode({
             <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3">
               <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse" />
               <span className="text-[#0a2540] text-[15px] font-bold font-['Poppins']">
-                Navegação pausada
+                {t("navmode.navPaused", language)}
               </span>
             </div>
           </motion.div>
@@ -893,7 +908,7 @@ export function NavigationMode({
                   {formatTime(remainingTimeSeconds)}
                 </p>
                 <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[11px] font-['Poppins']`}>
-                  min restantes
+                  {t("navmode.minLeft", language)}
                 </p>
               </div>
             </div>
@@ -907,7 +922,7 @@ export function NavigationMode({
                   {formatDistance(remainingDistance)}
                 </p>
                 <p className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[11px] font-['Poppins']`}>
-                  restantes
+                  {t("navmode.remaining", language)}
                 </p>
               </div>
             </div>
@@ -931,7 +946,7 @@ export function NavigationMode({
           <div className="px-5 pb-3 flex items-center justify-between">
             <div className={`flex items-center gap-2 ${isDark ? "bg-gray-800" : "bg-[#f3f5f7]"} px-4 py-2 rounded-xl`}>
               <span className={`text-[13px] ${isDark ? "text-gray-400" : "text-[#7B838F]"} font-['Poppins']`}>
-                Chegada estimada
+                {t("navmode.eta", language)}
               </span>
               <span className={`text-[15px] ${isDark ? "text-white" : "text-[#101828]"} font-bold font-['Poppins']`}>
                 {getETA(remainingTimeSeconds)}
@@ -960,8 +975,8 @@ export function NavigationMode({
             )}
             <span className={`text-[13px] ${isDark ? "text-gray-400" : "text-[#7B838F]"} font-medium font-['Poppins']`}>
               {showAllSteps
-                ? "Ocultar passos"
-                : `${route.steps.length - currentStepIdx - 1} passos restantes`}
+                ? t("navmode.hideSteps", language)
+                : `${route.steps.length - currentStepIdx - 1} ${t("navmode.stepsLeft", language)}`}
             </span>
           </button>
 
