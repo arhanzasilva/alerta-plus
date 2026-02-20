@@ -303,7 +303,16 @@ export function MapView() {
       userMarkerRef.current.setLngLat(lngLat);
     } else {
       const el = document.createElement("div");
-      el.className = "user-location-dot";
+      el.style.cssText = `
+        width: 20px;
+        height: 20px;
+        background: #2b7fff;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(43, 127, 255, 0.55);
+        animation: user-dot-pulse 2s infinite;
+        cursor: default;
+      `;
       userMarkerRef.current = new mapboxgl.Marker({ element: el })
         .setLngLat(lngLat)
         .addTo(map);
