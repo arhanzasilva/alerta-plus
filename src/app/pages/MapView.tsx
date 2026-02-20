@@ -304,15 +304,16 @@ export function MapView() {
     } else {
       const el = document.createElement("div");
       el.style.cssText = `
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         background: #2b7fff;
         border: 3px solid white;
         border-radius: 50%;
-        box-shadow: 0 0 0 0 rgba(43,127,255,0.55), 0 2px 8px rgba(43,127,255,0.4);
+        box-shadow: 0 0 0 0 rgba(43, 127, 255, 0.55);
         animation: user-dot-pulse 2s infinite;
+        cursor: default;
       `;
-      userMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
+      userMarkerRef.current = new mapboxgl.Marker({ element: el })
         .setLngLat(lngLat)
         .addTo(map);
     }
