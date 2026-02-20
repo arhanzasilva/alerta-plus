@@ -19,6 +19,9 @@ import {
 } from "@tabler/icons-react";
 import { useApp } from "../context/AppContext";
 import { t } from "../context/translations";
+import mapboxgl from "mapbox-gl";
+import { MAPBOX_TOKEN } from "../../config/mapbox";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 interface RouteStep {
   instruction: string;
@@ -39,6 +42,7 @@ interface RouteData {
   gradient: string;
   description: string;
   steps: RouteStep[];
+  geometry?: GeoJSON.LineString;
 }
 
 interface NavigationModeProps {
@@ -141,6 +145,27 @@ function getETA(secondsRemaining: number): string {
   });
 }
 
+// Calculate distance between two coordinates (Haversine formula)
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+
 export function NavigationMode({
   route,
   origin,
@@ -157,7 +182,19 @@ export function NavigationMode({
   const [simulatedSpeed, setSimulatedSpeed] = useState(0); // km/h
   const [isPaused, setIsPaused] = useState(false);
   const [hasArrived, setHasArrived] = useState(false);
+  const [isOffRoute, setIsOffRoute] = useState(false);
+  const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [useGPS, setUseGPS] = useState(true); // Toggle between GPS and simulation
+  const [dismissedStepWarning, setDismissedStepWarning] = useState(false);
+  const [dismissedOffRouteAlert, setDismissedOffRouteAlert] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullMapMode, setIsFullMapMode] = useState(false);
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
+  const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const geoWatchIdRef = useRef<number | null>(null);
 
   const totalDistanceMeters = parseDistanceToMeters(route.distance);
   const totalTimeSeconds = parseTimeToSeconds(route.time);
@@ -180,9 +217,247 @@ export function NavigationMode({
   const overallProgress = coveredDistance() / totalStepDistance;
   const remainingTimeSeconds = Math.max(0, totalTimeSeconds * (1 - overallProgress));
 
-  // Simulate navigation progress
+  // Reset dismissed warnings when step changes
   useEffect(() => {
-    if (isPaused || hasArrived) return;
+    setDismissedStepWarning(false);
+  }, [currentStepIdx]);
+
+  // Reset dismissed off-route alert when back on route
+  useEffect(() => {
+    if (!isOffRoute) {
+      setDismissedOffRouteAlert(false);
+    }
+  }, [isOffRoute]);
+
+  // Initialize Mapbox map
+  useEffect(() => {
+    if (!mapContainerRef.current) {
+      console.log('NavigationMode: mapContainerRef.current is null');
+      return;
+    }
+
+    if (mapInstanceRef.current) {
+      console.log('NavigationMode: Map already initialized');
+      return;
+    }
+
+    console.log('NavigationMode: Initializing Mapbox map');
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/navigation-day-v1',
+      center: [mapCenter.lng, mapCenter.lat],
+      zoom: 15,
+      pitch: 45, // 3D tilt
+      bearing: 0,
+      attributionControl: false,
+    });
+
+    console.log('NavigationMode: Mapbox map created successfully');
+
+    // Add zoom controls
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+
+    // Wait for map to load before drawing route
+    map.on('load', () => {
+      // Add route geometry if available
+      if (route.geometry) {
+        map.addSource('route', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: route.geometry,
+          },
+        });
+
+        // Route outline
+        map.addLayer({
+          id: 'route-outline',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#0a2540',
+            'line-width': 8,
+            'line-opacity': 0.6,
+          },
+        });
+
+        // Route line
+        map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#2b7fff',
+            'line-width': 5,
+          },
+        });
+
+        // Fit bounds to route
+        const coordinates = route.geometry.coordinates as [number, number][];
+        const bounds = coordinates.reduce(
+          (bounds, coord) => bounds.extend(coord),
+          new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
+        );
+        map.fitBounds(bounds, { padding: 100, duration: 0 });
+      }
+
+      // Add destination marker
+      if (route.geometry) {
+        const coords = route.geometry.coordinates as [number, number][];
+        const destCoord = coords[coords.length - 1];
+        new mapboxgl.Marker({ color: '#10b981' })
+          .setLngLat(destCoord)
+          .addTo(map);
+      }
+    });
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [mapCenter, route.geometry, isDark]);
+
+  // GPS tracking
+  useEffect(() => {
+    if (!useGPS || isPaused || hasArrived) return;
+
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported, falling back to simulation');
+      setUseGPS(false);
+      return;
+    }
+
+    // Start watching position
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, speed } = position.coords;
+        const newPos = { lat: latitude, lng: longitude };
+        setUserPosition(newPos);
+
+        // Update speed (convert m/s to km/h)
+        if (speed !== null && speed >= 0) {
+          setSimulatedSpeed(speed * 3.6);
+        }
+
+        // Update user marker on map
+        const map = mapInstanceRef.current;
+        if (map) {
+          if (!userMarkerRef.current) {
+            // Create user marker
+            const el = document.createElement('div');
+            el.className = 'user-location-marker';
+            el.style.width = '20px';
+            el.style.height = '20px';
+            el.style.borderRadius = '50%';
+            el.style.backgroundColor = '#2b7fff';
+            el.style.border = '3px solid white';
+            el.style.boxShadow = '0 0 10px rgba(43, 127, 255, 0.5)';
+
+            userMarkerRef.current = new mapboxgl.Marker({ element: el })
+              .setLngLat([longitude, latitude])
+              .addTo(map);
+          } else {
+            userMarkerRef.current.setLngLat([longitude, latitude]);
+          }
+
+          // Recenter map on user (smooth follow)
+          map.easeTo({
+            center: [longitude, latitude],
+            duration: 1000,
+          });
+        }
+
+        // Check distance to next step and auto-advance
+        if (route.geometry) {
+          const coords = route.geometry.coordinates as [number, number][];
+
+          // Find the coordinate for current step endpoint
+          let stepEndIdx = 0;
+          for (let i = 0; i <= currentStepIdx; i++) {
+            stepEndIdx += Math.max(1, Math.floor((stepDistances[i] / totalStepDistance) * coords.length));
+          }
+          stepEndIdx = Math.min(stepEndIdx, coords.length - 1);
+
+          const stepEndCoord = coords[stepEndIdx];
+          const distToStepEnd = calculateDistance(
+            latitude,
+            longitude,
+            stepEndCoord[1],
+            stepEndCoord[0]
+          );
+
+          // If within 20m of step end, advance to next step
+          if (distToStepEnd < 20 && currentStepIdx < route.steps.length - 1) {
+            setCurrentStepIdx(prev => prev + 1);
+            setStepProgress(0);
+
+            if (!isMuted) {
+              // Voice notification (optional)
+              const nextStep = route.steps[currentStepIdx + 1];
+              if (nextStep && 'speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(nextStep.instruction);
+                utterance.lang = 'pt-BR';
+                window.speechSynthesis.speak(utterance);
+              }
+            }
+          } else if (currentStepIdx === route.steps.length - 1 && distToStepEnd < 15) {
+            // Arrived at destination
+            setHasArrived(true);
+          } else {
+            // Update progress within current step
+            const stepStartIdx = stepEndIdx - Math.floor((stepDistances[currentStepIdx] / totalStepDistance) * coords.length);
+            const stepLength = stepDistances[currentStepIdx];
+            const progress = Math.max(0, Math.min(1, 1 - (distToStepEnd / stepLength)));
+            setStepProgress(progress);
+          }
+
+          // Check if off route (more than 50m from any point on route)
+          const minDistToRoute = coords.reduce((minDist, coord) => {
+            const dist = calculateDistance(latitude, longitude, coord[1], coord[0]);
+            return Math.min(minDist, dist);
+          }, Infinity);
+
+          setIsOffRoute(minDistToRoute > 50);
+        }
+      },
+      (error) => {
+        console.error('GPS error:', error);
+        // Fall back to simulation mode
+        setUseGPS(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0,
+      }
+    );
+
+    geoWatchIdRef.current = watchId;
+
+    return () => {
+      if (geoWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(geoWatchIdRef.current);
+        geoWatchIdRef.current = null;
+      }
+    };
+  }, [useGPS, isPaused, hasArrived, currentStepIdx, route.geometry, route.steps, isMuted, stepDistances, totalStepDistance]);
+
+  // Simulate navigation progress (fallback when GPS unavailable)
+  useEffect(() => {
+    if (useGPS || isPaused || hasArrived) return;
 
     intervalRef.current = setInterval(() => {
       setStepProgress((prev) => {
@@ -228,18 +503,21 @@ export function NavigationMode({
     .slice(currentStepIdx)
     .filter((s) => s.warning);
 
+  // Main container (always rendered)
+  const mapElement = (
+    <div
+      ref={mapContainerRef}
+      className="absolute inset-0 w-full h-full"
+      style={{ zIndex: 1 }}
+    />
+  );
+
   // Arrival screen
   if (hasArrived) {
     return (
       <div className="fixed inset-0 z-[9999] overflow-hidden">
         {/* Map background */}
-        <div className="absolute inset-0">
-          <iframe
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 0.015},${mapCenter.lat - 0.015},${mapCenter.lng + 0.015},${mapCenter.lat + 0.015}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}`}
-            className="w-full h-full border-0"
-            title="Mapa"
-          />
-        </div>
+        {mapElement}
 
         {/* Arrival overlay */}
         <motion.div
@@ -298,21 +576,18 @@ export function NavigationMode({
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden bg-[#0a2540]">
       {/* Full-screen map */}
-      <div className="absolute inset-0">
-        <iframe
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 0.02},${mapCenter.lat - 0.02},${mapCenter.lng + 0.02},${mapCenter.lat + 0.02}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}`}
-          className="w-full h-full border-0"
-          title="Mapa Navegação"
-        />
-      </div>
+      {mapElement}
 
       {/* ===== TOP: Current instruction panel ===== */}
-      <motion.div
-        initial={{ y: -120 }}
-        animate={{ y: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="absolute top-0 left-0 right-0 z-[200]"
-      >
+      <AnimatePresence>
+        {!isFullMapMode && (
+          <motion.div
+            initial={{ y: -120 }}
+            animate={{ y: 0 }}
+            exit={{ y: -120 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="absolute top-0 left-0 right-0 z-[200]"
+          >
         {/* Main instruction */}
         <div className="bg-[#0a2540]/95 backdrop-blur-xl pt-[env(safe-area-inset-top)] shadow-2xl">
           <div className="px-4 pt-3 pb-3">
@@ -411,7 +686,7 @@ export function NavigationMode({
 
         {/* Warning alert (if current step has one) */}
         <AnimatePresence>
-          {currentStep.warning && (
+          {currentStep.warning && !dismissedStepWarning && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -428,11 +703,51 @@ export function NavigationMode({
                     {currentStep.warning}
                   </p>
                 </div>
+                <button
+                  onClick={() => setDismissedStepWarning(true)}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/20 active:scale-90 transition"
+                  aria-label="Fechar alerta"
+                >
+                  <IconX className="w-4 h-4" />
+                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+
+        {/* Off-route alert */}
+        <AnimatePresence>
+          {isOffRoute && !dismissedOffRouteAlert && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mx-4 mt-3"
+            >
+              <div className="bg-red-500/95 backdrop-blur-sm text-white px-4 py-3 rounded-2xl flex items-start gap-3 shadow-lg">
+                <IconAlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold font-['Poppins'] leading-tight">
+                    Você saiu da rota
+                  </p>
+                  <p className="text-white/90 text-[12px] font-['Poppins'] leading-tight mt-0.5">
+                    Retorne para a rota segura o mais rápido possível
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDismissedOffRouteAlert(true)}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/20 active:scale-90 transition"
+                  aria-label="Fechar alerta"
+                >
+                  <IconX className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ===== MAP OVERLAY BUTTONS ===== */}
       <div className="absolute right-4 top-1/2 -translate-y-1/2 z-[150] flex flex-col gap-3">
@@ -452,8 +767,40 @@ export function NavigationMode({
         </button>
 
         {/* Recenter */}
-        <button className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center active:scale-90 transition">
+        <button
+          onClick={() => {
+            if (mapInstanceRef.current && userPosition) {
+              mapInstanceRef.current.easeTo({
+                center: [userPosition.lng, userPosition.lat],
+                duration: 1000,
+              });
+            }
+          }}
+          className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center active:scale-90 transition"
+        >
           <IconMapPin className="w-5 h-5 text-[#0a2540]" />
+        </button>
+
+        {/* Toggle GPS/Simulation (for testing) */}
+        <button
+          onClick={() => setUseGPS(!useGPS)}
+          className={`w-12 h-12 rounded-2xl shadow-lg flex items-center justify-center active:scale-90 transition ${
+            useGPS ? 'bg-green-500' : 'bg-gray-300'
+          }`}
+          title={useGPS ? 'GPS Ativo' : 'Simulação Ativa'}
+        >
+          <IconNavigation className={`w-5 h-5 ${useGPS ? 'text-white' : 'text-gray-600'}`} />
+        </button>
+
+        {/* Toggle Full Map Mode */}
+        <button
+          onClick={() => setIsFullMapMode(!isFullMapMode)}
+          className={`w-12 h-12 rounded-2xl shadow-lg flex items-center justify-center active:scale-90 transition ${
+            isFullMapMode ? 'bg-blue-500' : 'bg-white'
+          }`}
+          title={isFullMapMode ? 'Mostrar Painéis' : 'Mapa Completo'}
+        >
+          <IconChevronDown className={`w-5 h-5 ${isFullMapMode ? 'text-white rotate-180' : 'text-[#0a2540]'} transition-transform`} />
         </button>
       </div>
 
@@ -477,12 +824,15 @@ export function NavigationMode({
       </AnimatePresence>
 
       {/* ===== BOTTOM: Stats & Steps panel ===== */}
-      <motion.div
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        transition={{ type: "spring", damping: 30, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 z-[200]"
-      >
+      <AnimatePresence>
+        {!isFullMapMode && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="absolute bottom-0 left-0 right-0 z-[200]"
+          >
         {/* Overall progress bar */}
         <div className="px-4 mb-1">
           <div className="h-1 bg-white/20 rounded-full overflow-hidden">
@@ -498,14 +848,47 @@ export function NavigationMode({
         <div className={`${isDark ? "bg-[#1f2937]" : "bg-white"} rounded-t-[28px] shadow-[0px_-10px_40px_0px_rgba(0,0,0,0.2)]`}>
           {/* Drag handle */}
           <button
-            onClick={() => setShowAllSteps(!showAllSteps)}
+            onClick={() => setIsMinimized(!isMinimized)}
             className="w-full flex items-center justify-center pt-3 pb-1 active:opacity-60 transition"
           >
             <div className={`w-10 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
           </button>
 
-          {/* Main stats row */}
-          <div className="px-5 py-3 flex items-center justify-between">
+          {/* Minimized view - just essential stats */}
+          {isMinimized ? (
+            <div className="px-5 py-3 pb-5 flex items-center justify-between" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
+              <div className="flex items-center gap-1.5">
+                <IconClock className="w-3.5 h-3.5 text-[#2b7fff]" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[18px] font-bold font-['Poppins']`}>
+                  {formatTime(remainingTimeSeconds)}
+                </span>
+              </div>
+
+              <div className={`h-6 w-px ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
+
+              <div className="flex items-center gap-1.5">
+                <IconRoute className="w-3.5 h-3.5 text-green-500" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[18px] font-bold font-['Poppins']`}>
+                  {formatDistance(remainingDistance)}
+                </span>
+              </div>
+
+              <div className={`h-6 w-px ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
+
+              <div className="flex items-center gap-1.5">
+                <IconGauge className="w-3.5 h-3.5 text-orange-500" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[18px] font-bold font-['Poppins']`}>
+                  {Math.round(simulatedSpeed)}
+                </span>
+                <span className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[13px] font-['Poppins']`}>
+                  km/h
+                </span>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Main stats row */}
+              <div className="px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <IconClock className="w-4 h-4 text-[#2b7fff]" />
               <div>
@@ -674,19 +1057,67 @@ export function NavigationMode({
               </motion.div>
             )}
           </AnimatePresence>
+            </>
+          )}
 
-          {/* End navigation button */}
-          <div className="px-5 pb-5 pt-2" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
-            <button
-              onClick={onClose}
-              className={`w-full py-4 ${isDark ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-600"} border rounded-2xl text-[15px] font-bold font-['Poppins'] active:scale-95 transition flex items-center justify-center gap-2`}
-            >
-              <IconX className="w-5 h-5" />
-              {t("navmode.endNavigation", language)}
-            </button>
-          </div>
+          {/* End navigation button - always visible */}
+          {!isMinimized && (
+            <div className="px-5 pb-5 pt-2" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
+              <button
+                onClick={onClose}
+                className={`w-full py-4 ${isDark ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-600"} border rounded-2xl text-[15px] font-bold font-['Poppins'] active:scale-95 transition flex items-center justify-center gap-2`}
+              >
+                <IconX className="w-5 h-5" />
+                {t("navmode.endNavigation", language)}
+              </button>
+            </div>
+          )}
         </div>
-      </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== FLOATING STATS BADGE (Full Map Mode) ===== */}
+      <AnimatePresence>
+        {isFullMapMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-6 left-1/2 -translate-x-1/2 z-[200]"
+          >
+            <div className={`${isDark ? "bg-[#1f2937]/95" : "bg-white/95"} backdrop-blur-xl px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-4`}>
+              <div className="flex items-center gap-1.5">
+                <IconClock className="w-3.5 h-3.5 text-[#2b7fff]" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[16px] font-bold font-['Poppins']`}>
+                  {formatTime(remainingTimeSeconds)}
+                </span>
+              </div>
+
+              <div className={`h-5 w-px ${isDark ? "bg-gray-600" : "bg-gray-300"}`} />
+
+              <div className="flex items-center gap-1.5">
+                <IconRoute className="w-3.5 h-3.5 text-green-500" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[16px] font-bold font-['Poppins']`}>
+                  {formatDistance(remainingDistance)}
+                </span>
+              </div>
+
+              <div className={`h-5 w-px ${isDark ? "bg-gray-600" : "bg-gray-300"}`} />
+
+              <div className="flex items-center gap-1.5">
+                <IconGauge className="w-3.5 h-3.5 text-orange-500" />
+                <span className={`${isDark ? "text-white" : "text-[#101828]"} text-[16px] font-bold font-['Poppins']`}>
+                  {Math.round(simulatedSpeed)}
+                </span>
+                <span className={`${isDark ? "text-gray-400" : "text-[#7B838F]"} text-[12px] font-['Poppins']`}>
+                  km/h
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,10 +1,14 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp, Incident } from "../context/AppContext";
-import L from "leaflet";
+import mapboxgl from "mapbox-gl";
 import { toast } from "sonner";
 import { t, formatDistanceWithUnit } from "../context/translations";
 import { useNavigate } from "react-router";
+import { MAPBOX_TOKEN, MAPBOX_STYLES } from "../../config/mapbox";
+import { mapboxService, type AddressSuggestion } from "../lib/mapboxService";
+import { useSearchHistory } from "../hooks/useSearchHistory";
+import { usePlannedRoutes } from "../hooks/usePlannedRoutes";
 import {
   IconSearch,
   IconX,
@@ -37,7 +41,12 @@ import {
   IconHome,
   IconBuilding,
   IconCurrentLocation,
+  IconBarbell,
+  IconSchool,
 } from "@tabler/icons-react";
+
+// Initialize Mapbox token
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 // ─── Haversine distance (meters) ───
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -188,6 +197,8 @@ export function MapView() {
   const { mapLayers, toggleMapLayer, addIncident, userLocation, incidents, theme, language, distanceUnit } = useApp();
   const isDark = theme === "dark";
   const navigate = useNavigate();
+  const { history, addToHistory, removeFromHistory, clearHistory } = useSearchHistory();
+  const { getLatestByCategory } = usePlannedRoutes();
 
   // Theme-aware classes for overlays
   const sheetBg = isDark ? "bg-[#1f2937]" : "bg-white";
@@ -204,6 +215,8 @@ export function MapView() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [selectedAlertType, setSelectedAlertType] = useState<string | null>(null);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
@@ -218,12 +231,11 @@ export function MapView() {
   const lat = userLocation?.lat || -3.119;
   const lng = userLocation?.lng || -60.021;
 
-  // ═══ Leaflet direct integration (no react-leaflet) ═══
+  // ═══ Mapbox GL integration ═══
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const userMarkerRef = useRef<L.Marker | null>(null);
-  const userCircleRef = useRef<L.Circle | null>(null);
-  const overlayLayerRef = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const incidentMarkersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup }>>(new Map());
 
   // Visible incidents
   const visibleIncidents = useMemo(
@@ -231,77 +243,64 @@ export function MapView() {
     [incidents, mapLayers]
   );
 
-  // Initialize Leaflet map
+  // Initialize Mapbox map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [lat, lng],
-      zoom: 15,
-      zoomControl: false,
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light,
+      center: [lng, lat],
+      zoom: 14,
       attributionControl: true,
+      logoPosition: "bottom-right",
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://osm.org/copyright">OSM</a>',
-    }).addTo(map);
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
 
-    overlayLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
-    // Force a resize after mount to fix grey tiles
-    const resizeTimer = setTimeout(() => {
-      if (mapRef.current) {
-        try {
-          mapRef.current.invalidateSize();
-        } catch (_) {
-          // Map may have been removed before timeout fired
-        }
-      }
-    }, 200);
-
     return () => {
-      clearTimeout(resizeTimer);
       map.remove();
       mapRef.current = null;
-      overlayLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update map style when theme changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newStyle = isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light;
+    map.setStyle(newStyle);
+  }, [isDark]);
 
   // Update user location marker
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !userLocation) return;
 
-    const pos: L.LatLngExpression = [userLocation.lat, userLocation.lng];
-
-    // Blue accuracy circle
-    if (userCircleRef.current) {
-      userCircleRef.current.setLatLng(pos);
-    } else {
-      userCircleRef.current = L.circle(pos, {
-        radius: 50,
-        color: "#2b7fff",
-        fillColor: "#2b7fff",
-        fillOpacity: 0.08,
-        weight: 1,
-        opacity: 0.3,
-      }).addTo(map);
-    }
-
-    // Blue dot marker
-    const icon = L.divIcon({
-      className: "",
-      html: '<div class="user-location-dot"></div>',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
+    const lngLat: [number, number] = [userLocation.lng, userLocation.lat];
 
     if (userMarkerRef.current) {
-      userMarkerRef.current.setLatLng(pos);
+      userMarkerRef.current.setLngLat(lngLat);
     } else {
-      userMarkerRef.current = L.marker(pos, { icon, zIndexOffset: 1000 }).addTo(map);
+      // Create custom user location marker
+      const el = document.createElement("div");
+      el.className = "user-location-marker";
+      el.style.cssText = `
+        width: 20px;
+        height: 20px;
+        background: #2b7fff;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 10px rgba(43, 127, 255, 0.5);
+      `;
+
+      userMarkerRef.current = new mapboxgl.Marker({ element: el })
+        .setLngLat(lngLat)
+        .addTo(map);
     }
   }, [userLocation]);
 
@@ -309,64 +308,120 @@ export function MapView() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !userLocation) return;
-    map.setView([userLocation.lat, userLocation.lng], map.getZoom(), { animate: true });
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], essential: true, duration: 1000 });
   }, [userLocation]);
 
   // Render incident overlays (zones + markers)
   useEffect(() => {
-    const layer = overlayLayerRef.current;
-    if (!layer) return;
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
 
-    layer.clearLayers();
+    // Clear existing incident markers
+    incidentMarkersRef.current.forEach(({ marker, popup }) => {
+      marker.remove();
+      popup.remove();
+    });
+    incidentMarkersRef.current.clear();
 
+    // Add GeoJSON source for risk zones (circles)
+    const features = visibleIncidents.map((inc) => {
+      const radius = RISK_RADII[inc.severity] || 120;
+      const color = INCIDENT_COLORS[inc.type] || "#6B7280";
+
+      return {
+        type: "Feature" as const,
+        properties: {
+          color,
+          radius,
+          incidentId: inc.id,
+          isNear: proximityAlert?.incident.id === inc.id,
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [inc.location.lng, inc.location.lat],
+        },
+      };
+    });
+
+    // Remove existing source/layer
+    if (map.getLayer("risk-zones")) map.removeLayer("risk-zones");
+    if (map.getSource("risk-zones")) map.removeSource("risk-zones");
+
+    // Add risk zones as circles
+    map.addSource("risk-zones", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features,
+      },
+    });
+
+    map.addLayer({
+      id: "risk-zones",
+      type: "circle",
+      source: "risk-zones",
+      paint: {
+        "circle-radius": {
+          stops: [
+            [0, 0],
+            [20, ["get", "radius"]],
+          ],
+          base: 2,
+        },
+        "circle-color": ["get", "color"],
+        "circle-opacity": 0.15,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": ["get", "color"],
+        "circle-stroke-opacity": 0.5,
+      },
+    });
+
+    // Add incident markers
     visibleIncidents.forEach((inc) => {
       const color = INCIDENT_COLORS[inc.type] || "#6B7280";
-      const radius = RISK_RADII[inc.severity] || 120;
-      const isSecurityZone = SECURITY_TYPES.includes(inc.type);
-      const isNear = proximityAlert?.incident.id === inc.id;
-      const center: L.LatLngExpression = [inc.location.lat, inc.location.lng];
 
-      // Risk zone circle
-      const zoneCircle = L.circle(center, {
-        radius,
-        color,
-        fillColor: color,
-        fillOpacity: isNear ? 0.25 : 0.12,
-        weight: isNear ? 2.5 : 1.5,
-        opacity: isNear ? 0.9 : 0.5,
-        dashArray: isSecurityZone ? undefined : "6 4",
-        className: isNear ? "risk-zone-pulse" : undefined,
-      });
-      layer.addLayer(zoneCircle);
-
-      // Incident dot marker
-      const dot = L.circleMarker(center, {
-        radius: 6,
-        color: "white",
-        fillColor: color,
-        fillOpacity: 1,
-        weight: 2,
-      });
+      // Create marker element
+      const el = document.createElement("div");
+      el.className = "incident-marker";
+      el.style.cssText = `
+        width: 16px;
+        height: 16px;
+        background: ${color};
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        cursor: pointer;
+      `;
 
       const severityLabel =
         inc.severity === "critical" ? "Critico" :
         inc.severity === "high" ? "Alto" :
         inc.severity === "medium" ? "Medio" : "Baixo";
 
-      dot.bindPopup(
-        `<div style="font-family:Poppins,sans-serif;min-width:160px">` +
-        `<p style="font-size:13px;font-weight:700;color:#0a2540;margin:0 0 2px">${inc.description || inc.type}</p>` +
+      // Create popup
+      const popup = new mapboxgl.Popup({
+        closeButton: false,
+        offset: 25,
+        className: isDark ? "mapbox-popup-dark" : "",
+      }).setHTML(
+        `<div style="font-family:Poppins,sans-serif;min-width:160px;padding:4px">` +
+        `<p style="font-size:13px;font-weight:700;color:${isDark ? '#f3f4f6' : '#0a2540'};margin:0 0 2px">${inc.description || inc.type}</p>` +
         `<p style="font-size:11px;color:#6B7280;margin:0 0 4px">${inc.location.address}</p>` +
         `<div style="display:flex;align-items:center;gap:6px">` +
         `<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>` +
         `<span style="font-size:10px;font-weight:500;color:${color}">${severityLabel}</span>` +
         `<span style="font-size:10px;color:#9ca3af;margin-left:4px">${inc.confirmations} confirmacoes</span>` +
-        `</div></div>`,
-        { closeButton: false, className: "leaflet-popup-custom" }
+        `</div></div>`
       );
-      layer.addLayer(dot);
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([inc.location.lng, inc.location.lat])
+        .setPopup(popup)
+        .addTo(map);
+
+      incidentMarkersRef.current.set(inc.id, { marker, popup });
     });
-  }, [visibleIncidents, proximityAlert]);
+  }, [visibleIncidents, proximityAlert, isDark]);
 
   // ═══ Proximity detection ═══
   useEffect(() => {
@@ -439,17 +494,64 @@ export function MapView() {
     }
   }, [proximityAlert]);
 
+  // ═══ Address search with Mapbox API ═══
+  const searchAddresses = useCallback(
+    async (query: string) => {
+      if (!query.trim() || query.length < 2) {
+        setSuggestions([]);
+        return;
+      }
+
+      setIsLoadingSuggestions(true);
+
+      try {
+        const results = await mapboxService.getAddressSuggestions(
+          query,
+          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          {
+            limit: 6,
+            language: language as 'pt' | 'en' | 'es',
+            types: ['address', 'poi', 'place'],
+          }
+        );
+
+        setSuggestions(results);
+      } catch (error) {
+        console.error('Erro ao buscar endereços:', error);
+        toast.error('Erro ao buscar endereços');
+        setSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    },
+    [userLocation, language]
+  );
+
+  // Debounce search to avoid excessive API calls
+  useEffect(() => {
+    if (!showSearch) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      searchAddresses(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, showSearch, searchAddresses]);
+
   const handleRecenter = useCallback(() => {
     const map = mapRef.current;
     if (map && userLocation) {
-      map.setView([userLocation.lat, userLocation.lng], 15, { animate: true });
+      map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 15, essential: true });
     }
     toast("Centralizando no GPS...");
   }, [userLocation]);
 
   return (
     <div className="h-full w-full relative bg-[#eee] overflow-hidden lg:flex">
-      {/* ══ Leaflet Map Container (direct API) ═══ */}
+      {/* ══ Mapbox Container ═══ */}
       <div ref={mapContainerRef} className="absolute inset-0 lg:static lg:flex-1 z-0" />
 
       {/* ═══ Proximity Alert Banner ═══ */}
@@ -652,70 +754,208 @@ export function MapView() {
             </span>
           </button>
 
-          {/* Shortcuts */}
-          <div className="flex gap-2 mb-5">
-            {/* Casa */}
-            <button
-              onClick={() => navigate("/routes", { state: { origin: t("mapview.currentLocation", language), destination: "Condomínio Reserva da Cidade, Cidade Nova 2", autoSearch: true } })}
-              className={`flex items-center gap-2.5 ${isDark ? "bg-emerald-900/30 border-emerald-800/40" : "bg-[#ecfdf5] border-[#d1fae5]"} rounded-[16px] px-3 py-2 border active:scale-95 transition`}
-            >
-              <div className="w-8 h-8 bg-[#00BC7D] rounded-[14px] flex items-center justify-center">
-                <IconHome size={16} className="text-white" />
-              </div>
-              <div className="text-left">
-                <p className={`${sheetText} text-[16px] font-bold font-['Poppins']`}>{t("mapview.home", language)}</p>
-                <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>Ha 1 min</p>
-              </div>
-            </button>
-            {/* Trabalho */}
-            <button
-              onClick={() => navigate("/routes", { state: { origin: t("mapview.currentLocation", language), destination: "Centro Empresarial, Av. Eduardo Ribeiro, Centro", autoSearch: true } })}
-              className={`flex items-center gap-2.5 ${isDark ? "bg-blue-900/30 border-blue-800/40" : "bg-[#eff6ff] border-[#e4f0ff]"} rounded-[16px] px-3 py-2 border active:scale-95 transition`}
-            >
-              <div className="w-8 h-8 bg-[#2b7fff] rounded-[14px] flex items-center justify-center">
-                <IconBuilding size={16} className="text-white" />
-              </div>
-              <div className="text-left">
-                <p className={`${sheetText} text-[16px] font-bold font-['Poppins']`}>{t("mapview.work", language)}</p>
-                <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>Ha 49 min</p>
-              </div>
-            </button>
-            {/* Novo */}
-            <button
-              onClick={() => navigate("/routes")}
-              className={`flex items-center gap-2.5 ${isDark ? "bg-gray-800 border-gray-700" : "bg-[#f8f8f8] border-[#f8f8f8]"} rounded-[16px] px-3 py-2 border active:scale-95 transition`}
-            >
-              <div className="w-8 h-8 bg-[#9ba5a6] rounded-[14px] flex items-center justify-center">
-                <IconPlus className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <p className={`${sheetText} text-[16px] font-bold font-['Poppins']`}>{t("mapview.new", language)}</p>
-                <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{t("mapview.add", language)}</p>
-              </div>
-            </button>
+          {/* Shortcuts - Horizontal Scroll Carousel */}
+          <div className="mb-5 -mx-5">
+            <div className="flex gap-2 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide">
+              {/* Casa - Only show if configured */}
+              {(() => {
+                const homeRoute = getLatestByCategory("home");
+                if (homeRoute) {
+                  return (
+                    <button
+                      onClick={() => navigate("/routes", {
+                        state: {
+                          origin: homeRoute.origin,
+                          destination: homeRoute.destination,
+                          autoSearch: true
+                        }
+                      })}
+                      className={`flex items-center gap-2.5 ${isDark ? "bg-emerald-900/30 border-emerald-800/40" : "bg-[#ecfdf5] border-[#d1fae5]"} rounded-[16px] px-3 py-2 border active:scale-95 transition flex-shrink-0 snap-start`}
+                    >
+                      <div className="w-8 h-8 bg-[#00BC7D] rounded-[14px] flex items-center justify-center">
+                        <IconHome size={16} className="text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className={`${sheetText} text-[16px] font-bold font-['Poppins'] whitespace-nowrap`}>{homeRoute.name}</p>
+                        <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{homeRoute.scheduledTime}</p>
+                      </div>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Trabalho - Only show if configured */}
+              {(() => {
+                const workRoute = getLatestByCategory("work");
+                if (workRoute) {
+                  return (
+                    <button
+                      onClick={() => navigate("/routes", {
+                        state: {
+                          origin: workRoute.origin,
+                          destination: workRoute.destination,
+                          autoSearch: true
+                        }
+                      })}
+                      className={`flex items-center gap-2.5 ${isDark ? "bg-blue-900/30 border-blue-800/40" : "bg-[#eff6ff] border-[#e4f0ff]"} rounded-[16px] px-3 py-2 border active:scale-95 transition flex-shrink-0 snap-start`}
+                    >
+                      <div className="w-8 h-8 bg-[#2b7fff] rounded-[14px] flex items-center justify-center">
+                        <IconBuilding size={16} className="text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className={`${sheetText} text-[16px] font-bold font-['Poppins'] whitespace-nowrap`}>{workRoute.name}</p>
+                        <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{workRoute.scheduledTime}</p>
+                      </div>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Academia - Only show if configured */}
+              {(() => {
+                const gymRoute = getLatestByCategory("gym");
+                if (gymRoute) {
+                  return (
+                    <button
+                      onClick={() => navigate("/routes", {
+                        state: {
+                          origin: gymRoute.origin,
+                          destination: gymRoute.destination,
+                          autoSearch: true
+                        }
+                      })}
+                      className={`flex items-center gap-2.5 ${isDark ? "bg-orange-900/30 border-orange-800/40" : "bg-orange-50 border-orange-100"} rounded-[16px] px-3 py-2 border active:scale-95 transition flex-shrink-0 snap-start`}
+                    >
+                      <div className="w-8 h-8 bg-orange-500 rounded-[14px] flex items-center justify-center">
+                        <IconBarbell size={16} className="text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className={`${sheetText} text-[16px] font-bold font-['Poppins'] whitespace-nowrap`}>{gymRoute.name}</p>
+                        <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{gymRoute.scheduledTime}</p>
+                      </div>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Escola - Only show if configured */}
+              {(() => {
+                const schoolRoute = getLatestByCategory("school");
+                if (schoolRoute) {
+                  return (
+                    <button
+                      onClick={() => navigate("/routes", {
+                        state: {
+                          origin: schoolRoute.origin,
+                          destination: schoolRoute.destination,
+                          autoSearch: true
+                        }
+                      })}
+                      className={`flex items-center gap-2.5 ${isDark ? "bg-purple-900/30 border-purple-800/40" : "bg-purple-50 border-purple-100"} rounded-[16px] px-3 py-2 border active:scale-95 transition flex-shrink-0 snap-start`}
+                    >
+                      <div className="w-8 h-8 bg-purple-500 rounded-[14px] flex items-center justify-center">
+                        <IconSchool size={16} className="text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className={`${sheetText} text-[16px] font-bold font-['Poppins'] whitespace-nowrap`}>{schoolRoute.name}</p>
+                        <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{schoolRoute.scheduledTime}</p>
+                      </div>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Novo - Always visible */}
+              <button
+                onClick={() => navigate("/routes")}
+                className={`flex items-center gap-2.5 ${isDark ? "bg-gray-800 border-gray-700" : "bg-[#f8f8f8] border-[#f8f8f8]"} rounded-[16px] px-3 py-2 border active:scale-95 transition flex-shrink-0 snap-start`}
+              >
+                <div className="w-8 h-8 bg-[#9ba5a6] rounded-[14px] flex items-center justify-center">
+                  <IconPlus className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className={`${sheetText} text-[16px] font-bold font-['Poppins'] whitespace-nowrap`}>{t("mapview.new", language)}</p>
+                  <p className={`${sheetTextSec} text-[9px] font-medium font-['Poppins']`}>{t("mapview.add", language)}</p>
+                </div>
+              </button>
+            </div>
           </div>
 
-          {/* Recentes */}
-          <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[14px] font-semibold font-['Poppins'] mb-3`}>{t("mapview.recents", language)}</p>
-          {RECENT_LOCATIONS.map((loc) => (
-            <button
-              key={loc.id}
-              onClick={() => navigate("/routes", { state: { origin: t("mapview.currentLocation", language), destination: loc.address, autoSearch: true } })}
-              className={`w-full flex items-center gap-2.5 py-3 border-b ${sheetBorder} last:border-0`}
-            >
-              <div className={`w-8 h-8 ${isDark ? "bg-gray-600" : "bg-[#c0c0c0]"} rounded-full flex items-center justify-center flex-shrink-0`}>
-                <IconClock className="w-[18px] h-[18px] text-white" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className={`${sheetText} text-[15px] font-semibold font-['Poppins']`}>
-                  {loc.name}
+          {/* Recentes - Search History */}
+          {history.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[14px] font-semibold font-['Poppins']`}>
+                  {t("mapview.recents", language)}
                 </p>
-                <p className={`${sheetTextSec} text-[13px] font-medium font-['Poppins']`}>
-                  {loc.address}
+                <button
+                  onClick={clearHistory}
+                  className={`${sheetTextMuted} text-[11px] font-medium hover:text-red-500 transition`}
+                >
+                  Limpar
+                </button>
+              </div>
+              {history.slice(0, 5).map((loc) => {
+                const distance = userLocation
+                  ? haversineDistance(userLocation.lat, userLocation.lng, loc.lat, loc.lng)
+                  : null;
+
+                return (
+                  <button
+                    key={loc.id}
+                    onClick={() => {
+                      navigate("/routes", {
+                        state: {
+                          origin: t("mapview.currentLocation", language),
+                          originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                          destination: loc.address,
+                          destinationCoords: { lng: loc.lng, lat: loc.lat },
+                          autoSearch: true
+                        }
+                      });
+                    }}
+                    className={`w-full flex items-center gap-2.5 py-3 border-b ${sheetBorder} last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition`}
+                  >
+                    <div className={`w-8 h-8 ${isDark ? "bg-blue-600" : "bg-blue-500"} rounded-full flex items-center justify-center flex-shrink-0`}>
+                      <IconClock className="w-[18px] h-[18px] text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className={`${sheetText} text-[15px] font-semibold font-['Poppins']`}>
+                        {loc.label}
+                      </p>
+                      <p className={`${sheetTextSec} text-[13px] font-medium font-['Poppins']`}>
+                        {loc.address}
+                      </p>
+                    </div>
+                    {distance && (
+                      <span className={`${sheetTextSec} text-[12px] font-['Poppins'] flex-shrink-0`}>
+                        {formatDistanceWithUnit(distance, distanceUnit)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[14px] font-semibold font-['Poppins'] mb-3`}>
+                {t("mapview.recents", language)}
+              </p>
+              <div className="text-center py-6">
+                <IconClock className={`w-10 h-10 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
+                <p className={`${sheetTextMuted} text-[13px]`}>
+                  Nenhuma busca recente
+                </p>
+                <p className={`${sheetTextMuted} text-[11px] mt-1`}>
+                  Suas buscas aparecerão aqui
                 </p>
               </div>
-            </button>
-          ))}
+            </>
+          )}
         </div>
       </div>
 
@@ -753,16 +993,29 @@ export function MapView() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && searchQuery.trim()) {
+                    if (e.key === "Enter" && searchQuery.trim() && suggestions.length > 0) {
+                      const firstSuggestion = suggestions[0];
                       setShowSearch(false);
-                      navigate("/routes", { state: { origin: t("mapview.currentLocation", language), destination: searchQuery.trim(), autoSearch: true } });
+                      navigate("/routes", {
+                        state: {
+                          origin: t("mapview.currentLocation", language),
+                          originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                          destination: firstSuggestion.address,
+                          destinationCoords: { lng: firstSuggestion.lng, lat: firstSuggestion.lat },
+                          autoSearch: true
+                        }
+                      });
                     }
                   }}
                   className={`flex-1 bg-transparent text-[16px] font-['Poppins'] ${isDark ? "placeholder:text-gray-500 text-white" : "placeholder:text-[#c2c3ca] text-[#101828]"} focus:outline-none`}
                 />
-                <button onClick={() => { setShowSearch(false); setSearchQuery(""); }}>
-                  <IconX className={`w-5 h-5 ${sheetTextMuted}`} />
-                </button>
+                {isLoadingSuggestions ? (
+                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <button onClick={() => { setShowSearch(false); setSearchQuery(""); setSuggestions([]); }}>
+                    <IconX className={`w-5 h-5 ${sheetTextMuted}`} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -771,37 +1024,155 @@ export function MapView() {
               <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[14px] font-semibold font-['Poppins'] mb-3`}>
                 {t("mapview.suggestions", language)}
               </p>
-              {SUGGESTIONS.filter((s) => {
-                if (!searchQuery.trim()) return true;
-                const q = searchQuery.toLowerCase();
-                return s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q);
-              }).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    setShowSearch(false);
-                    navigate("/routes", { state: { origin: t("mapview.currentLocation", language), destination: s.address, autoSearch: true } });
-                  }}
-                  className={`w-full flex items-center gap-2.5 py-3.5 border-b ${sheetBorder}`}
-                >
-                  <div className={`w-8 h-8 ${isDark ? "bg-gray-600" : "bg-[#c0c0c0]"} rounded-full flex items-center justify-center flex-shrink-0`}>
-                    <IconMapPin className="w-[18px] h-[18px] text-white" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className={`${sheetText} text-[15px] font-semibold font-['Poppins']`}>
-                      {s.name}
+
+              {/* Loading state */}
+              {isLoadingSuggestions && searchQuery.length >= 2 && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-8 h-8 border-3 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!isLoadingSuggestions && searchQuery.length >= 2 && suggestions.length === 0 && (
+                <div className="text-center py-8">
+                  <IconMapPin className={`w-12 h-12 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
+                  <p className={`${sheetTextMuted} text-[14px]`}>
+                    Nenhum resultado encontrado
+                  </p>
+                  <p className={`${sheetTextMuted} text-[12px] mt-1`}>
+                    Tente buscar por endereço, bairro ou ponto de referência
+                  </p>
+                </div>
+              )}
+
+              {/* Suggestions from API */}
+              {!isLoadingSuggestions && suggestions.length > 0 && suggestions.map((s) => {
+                const distance = userLocation
+                  ? haversineDistance(userLocation.lat, userLocation.lng, s.lat, s.lng)
+                  : null;
+
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      // Add to history before navigating
+                      addToHistory(s);
+                      setShowSearch(false);
+                      setSearchQuery("");
+                      navigate("/routes", {
+                        state: {
+                          origin: t("mapview.currentLocation", language),
+                          originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                          destination: s.address,
+                          destinationCoords: { lng: s.lng, lat: s.lat },
+                          autoSearch: true
+                        }
+                      });
+                    }}
+                    className={`w-full flex items-center gap-2.5 py-3.5 border-b ${sheetBorder} hover:bg-gray-50 dark:hover:bg-gray-800 transition`}
+                  >
+                    <div className={`w-8 h-8 ${isDark ? "bg-blue-600" : "bg-blue-500"} rounded-full flex items-center justify-center flex-shrink-0`}>
+                      <IconMapPin className="w-[18px] h-[18px] text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className={`${sheetText} text-[15px] font-semibold font-['Poppins']`}>
+                        {s.label}
+                      </p>
+                      <p className={`${sheetTextSec} text-[13px] font-medium font-['Poppins']`}>
+                        {s.address}
+                      </p>
+                    </div>
+                    {distance && (
+                      <span className={`${sheetTextSec} text-[13px] font-['Poppins'] flex-shrink-0`}>
+                        {formatDistanceWithUnit(distance, distanceUnit)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Search History */}
+              {!searchQuery.trim() && history.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className={`${isDark ? "text-gray-500" : "text-[#404751] opacity-[0.36]"} text-[13px] font-semibold font-['Poppins']`}>
+                      Buscas recentes
                     </p>
-                    <p className={`${sheetTextSec} text-[13px] font-medium font-['Poppins']`}>
-                      {s.address}
-                    </p>
+                    <button
+                      onClick={clearHistory}
+                      className={`${sheetTextMuted} text-[12px] font-medium hover:text-red-500 transition`}
+                    >
+                      Limpar
+                    </button>
                   </div>
-                  {s.distance && (
-                    <span className={`${sheetTextSec} text-[13px] font-['Poppins'] flex-shrink-0`}>
-                      {s.distance}
-                    </span>
-                  )}
-                </button>
-              ))}
+
+                  {history.map((item) => {
+                    const distance = userLocation
+                      ? haversineDistance(userLocation.lat, userLocation.lng, item.lat, item.lng)
+                      : null;
+
+                    return (
+                      <div key={item.id} className="flex items-center gap-2.5 mb-1">
+                        <button
+                          onClick={() => {
+                            setShowSearch(false);
+                            setSearchQuery("");
+                            navigate("/routes", {
+                              state: {
+                                origin: t("mapview.currentLocation", language),
+                                originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                                destination: item.address,
+                                destinationCoords: { lng: item.lng, lat: item.lat },
+                                autoSearch: true
+                              }
+                            });
+                          }}
+                          className={`flex-1 flex items-center gap-2.5 py-3 border-b ${sheetBorder} hover:bg-gray-50 dark:hover:bg-gray-800 transition`}
+                        >
+                          <div className={`w-8 h-8 ${isDark ? "bg-gray-600" : "bg-gray-400"} rounded-full flex items-center justify-center flex-shrink-0`}>
+                            <IconClock className="w-[16px] h-[16px] text-white" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className={`${sheetText} text-[14px] font-medium font-['Poppins']`}>
+                              {item.label}
+                            </p>
+                            <p className={`${sheetTextSec} text-[12px] font-['Poppins']`}>
+                              {item.address}
+                            </p>
+                          </div>
+                          {distance && (
+                            <span className={`${sheetTextSec} text-[12px] font-['Poppins'] flex-shrink-0 mr-2`}>
+                              {formatDistanceWithUnit(distance, distanceUnit)}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromHistory(item.id);
+                          }}
+                          className={`p-2 ${sheetTextMuted} hover:text-red-500 transition`}
+                        >
+                          <IconX size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Placeholder when search and history are empty */}
+              {!searchQuery.trim() && history.length === 0 && (
+                <div className="text-center py-8">
+                  <IconSearch className={`w-12 h-12 ${sheetTextMuted} mx-auto mb-2 opacity-30`} />
+                  <p className={`${sheetTextMuted} text-[14px]`}>
+                    Digite para buscar endereços
+                  </p>
+                  <p className={`${sheetTextMuted} text-[12px] mt-1`}>
+                    Ex: Teatro Amazonas, Shopping, Av Constantino Nery
+                  </p>
+                </div>
+              )}
             </div>
           </motion.div>
           </>

@@ -14,7 +14,7 @@ App de alertas urbanos para Manaus/AM. React 18 + Vite + Tailwind CSS v4 + react
 - **Tailwind CSS v4.1.12** via plugin `@tailwindcss/vite` (sem tailwind.config.js)
 - **react-router v7.13.0** — Data mode com `createBrowserRouter` + `RouterProvider`
 - **motion 12.x** — animacoes via `import { motion } from "motion/react"`
-- **Leaflet 1.9.x** — mapa direto (`L.map()` com refs/effects), **NAO usar react-leaflet**
+- **Mapbox GL JS** — mapas modernos com WebGL, dark mode nativo, tiles vetoriais. API key configurada via `.env` (ver `MAPBOX_SETUP.md`)
 - **@tabler/icons-react** — icones (outline em geral; filled em CATEGORY_CONFIG do Routes.tsx e ACHIEVEMENT_DEFS do AppContext.tsx)
 - **sonner** — toasts
 - **Context API + localStorage** — estado global (prefixo `alertaplus_`)
@@ -88,7 +88,13 @@ MapView, Notifications, Profile, Settings, Layout, Routes, NavigationMode, Login
 Nenhuma (todas as paginas principais estao completas)
 
 ## Dependencias nao usadas (removidas do package.json)
-@emotion/*, @mui/*, @popperjs/core, react-dnd*, react-leaflet, react-popper, react-responsive-masonry, react-slick, date-fns
+@emotion/*, @mui/*, @popperjs/core, react-dnd*, leaflet, @types/leaflet, react-leaflet, react-popper, react-responsive-masonry, react-slick, date-fns
+
+## Configuracao do Mapbox
+- **API Key necessaria**: Configure `VITE_MAPBOX_TOKEN` em arquivo `.env` na raiz
+- **Free tier**: 50.000 map loads/mes (muito generoso)
+- **Guia completo**: Ver `MAPBOX_SETUP.md` para instrucoes passo a passo
+- **Estilos**: Dark/Light mode automatico (configurado em `src/config/mapbox.ts`)
 
 ## Pasta /src/imports/ (Figma)
 Contem ~80 arquivos de referencia visual do Figma. Apenas 4 SVGs sao usados pelo app:

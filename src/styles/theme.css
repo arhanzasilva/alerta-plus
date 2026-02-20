@@ -182,4 +182,46 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+
+  /* ═══ Mapbox Customizations ═══ */
+  .mapboxgl-ctrl-logo {
+    opacity: 0.4;
+  }
+
+  .mapboxgl-ctrl-attrib {
+    font-family: 'Poppins', sans-serif;
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  /* Dark mode Mapbox controls */
+  .dark .mapboxgl-ctrl-group button {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+
+  .dark .mapboxgl-ctrl-group button:hover {
+    background-color: #374151;
+  }
+
+  .dark .mapboxgl-ctrl-attrib {
+    background-color: rgba(31, 41, 55, 0.8);
+    color: #9ca3af;
+  }
+
+  /* Custom marker pulse animation */
+  @keyframes marker-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+
+  .marker-pulse {
+    animation: marker-pulse 2s ease-in-out infinite;
+  }
 }

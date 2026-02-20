@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import mapboxgl from "mapbox-gl";
 import {
   IconNavigation,
   IconMapPin,
@@ -38,6 +39,10 @@ import { toast } from "sonner";
 import { NavigationMode } from "../components/NavigationMode";
 import { useNavigate, useLocation } from "react-router";
 import { t } from "../context/translations";
+import { mapboxService } from "../lib/mapboxService";
+import { MAPBOX_TOKEN } from "../../config/mapbox";
+import { usePlannedRoutes, type PlannedRoute, type PlannedRouteCategory } from "../hooks/usePlannedRoutes";
+import { analyzeRouteSafety, formatSafetyWarnings } from "../lib/routeSafetyAnalyzer";
 
 interface RouteStep {
   instruction: string;
@@ -58,23 +63,10 @@ interface RouteData {
   gradient: string;
   description: string;
   steps: RouteStep[];
+  geometry?: GeoJSON.LineString; // Route line coordinates from Mapbox
 }
 
 const MANAUS_CENTER = { lat: -3.0356, lng: -60.0222 };
-
-type PlannedRouteCategory = "home" | "work" | "gym" | "school" | "custom";
-
-interface PlannedRoute {
-  id: string;
-  name: string;
-  category: PlannedRouteCategory;
-  origin: string;
-  destination: string;
-  scheduledTime: string;
-  days: string[];
-  isActive: boolean;
-  createdAt: number;
-}
 
 const DAYS_OF_WEEK = [
   { key: "seg", label: "S" },
@@ -94,50 +86,6 @@ const CATEGORY_CONFIG: Record<PlannedRouteCategory, { icon: any; color: string; 
   custom: { icon: IconMapPinFilled, color: "text-pink-500", bgLight: "bg-pink-50", bgDark: "bg-pink-500/15", label: "Outro" },
 };
 
-const STORAGE_KEY = "alertaplus_planned_routes";
-
-const DEFAULT_PLANNED_ROUTES: PlannedRoute[] = [
-  {
-    id: "planned-default-1",
-    name: "Casinha",
-    category: "home",
-    origin: "Condomínio Reserva da Cidade, Cidade Nova 2",
-    destination: "Centro, Manaus",
-    scheduledTime: "08:00",
-    days: ["sab", "dom"],
-    isActive: true,
-    createdAt: 1700000000000,
-  },
-  {
-    id: "planned-default-2",
-    name: "Soft Live",
-    category: "work",
-    origin: "Condomínio Reserva da Cidade, Cidade Nova 2",
-    destination: "Distrito Industrial, Manaus",
-    scheduledTime: "07:30",
-    days: ["sab", "dom"],
-    isActive: true,
-    createdAt: 1700000100000,
-  },
-];
-
-function loadPlannedRoutes(): PlannedRoute[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.length > 0 ? parsed : DEFAULT_PLANNED_ROUTES;
-    }
-    return DEFAULT_PLANNED_ROUTES;
-  } catch {
-    return DEFAULT_PLANNED_ROUTES;
-  }
-}
-
-function savePlannedRoutes(routes: PlannedRoute[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(routes));
-}
-
 export function Routes() {
   const {
     incidents,
@@ -156,6 +104,8 @@ export function Routes() {
   const navState = location.state as {
     origin?: string;
     destination?: string;
+    destinationCoords?: { lng: number; lat: number };
+    originCoords?: { lng: number; lat: number };
     autoSearch?: boolean;
   } | null;
 
@@ -167,8 +117,21 @@ export function Routes() {
   const [selectedRouteIdx, setSelectedRouteIdx] = useState<number | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
 
-  // Planned routes state
-  const [plannedRoutes, setPlannedRoutes] = useState<PlannedRoute[]>(loadPlannedRoutes);
+  // Real routes from Mapbox API
+  const [realRoutes, setRealRoutes] = useState<RouteData[] | null>(null);
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+  const [originCoords, setOriginCoords] = useState<{ lng: number; lat: number } | null>(null);
+  const [destinationCoords, setDestinationCoords] = useState<{ lng: number; lat: number } | null>(null);
+
+  // Planned routes from hook
+  const {
+    plannedRoutes,
+    addPlannedRoute,
+    updatePlannedRoute,
+    deletePlannedRoute,
+    togglePlannedActive: togglePlannedActiveHook
+  } = usePlannedRoutes();
+
   const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [editingPlanned, setEditingPlanned] = useState<PlannedRoute | null>(null);
   const [formName, setFormName] = useState("");
@@ -178,19 +141,36 @@ export function Routes() {
   const [formTime, setFormTime] = useState("07:30");
   const [formDays, setFormDays] = useState<string[]>(["seg", "ter", "qua", "qui", "sex"]);
 
-  useEffect(() => {
-    savePlannedRoutes(plannedRoutes);
-  }, [plannedRoutes]);
+  // Map ref for route visualization
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
 
   // Handle side effects from navigation state (clear history, track search)
   useEffect(() => {
     if (!navState) return;
+
+    // Load coordinates if provided
+    if (navState.destinationCoords) {
+      setDestinationCoords(navState.destinationCoords);
+    }
+    if (navState.originCoords) {
+      setOriginCoords(navState.originCoords);
+    }
 
     // Clear the state so it doesn't re-trigger on re-renders
     window.history.replaceState({}, "");
 
     if (navState.autoSearch && navState.origin && navState.destination) {
       incrementRoutesSearched();
+      // Auto-search routes if coordinates are provided
+      if (navState.destinationCoords) {
+        searchRealRoutes(
+          navState.origin,
+          navState.destination,
+          navState.originCoords,
+          navState.destinationCoords
+        );
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -228,21 +208,17 @@ export function Routes() {
     }
 
     if (editingPlanned) {
-      setPlannedRoutes(prev =>
-        prev.map(r => r.id === editingPlanned.id ? {
-          ...r,
-          name: formName.trim(),
-          category: formCategory,
-          origin: formOrigin.trim(),
-          destination: formDestination.trim(),
-          scheduledTime: formTime,
-          days: formDays,
-        } : r)
-      );
+      updatePlannedRoute(editingPlanned.id, {
+        name: formName.trim(),
+        category: formCategory,
+        origin: formOrigin.trim(),
+        destination: formDestination.trim(),
+        scheduledTime: formTime,
+        days: formDays,
+      });
       toast.success(t("routes.plannedUpdated", language));
     } else {
-      const newRoute: PlannedRoute = {
-        id: `planned-${Date.now()}`,
+      addPlannedRoute({
         name: formName.trim(),
         category: formCategory,
         origin: formOrigin.trim(),
@@ -250,9 +226,7 @@ export function Routes() {
         scheduledTime: formTime,
         days: formDays,
         isActive: true,
-        createdAt: Date.now(),
-      };
-      setPlannedRoutes(prev => [...prev, newRoute]);
+      });
       toast.success(t("routes.plannedCreated", language));
     }
 
@@ -261,13 +235,11 @@ export function Routes() {
   };
 
   const togglePlannedActive = (id: string) => {
-    setPlannedRoutes(prev =>
-      prev.map(r => r.id === id ? { ...r, isActive: !r.isActive } : r)
-    );
+    togglePlannedActiveHook(id);
   };
 
-  const deletePlannedRoute = (id: string) => {
-    setPlannedRoutes(prev => prev.filter(r => r.id !== id));
+  const deletePlannedRouteLocal = (id: string) => {
+    deletePlannedRoute(id);
     toast(t("routes.plannedRemoved", language));
   };
 
@@ -292,10 +264,197 @@ export function Routes() {
     return days.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(", ");
   };
 
+  /**
+   * Busca rotas reais usando a API do Mapbox
+   */
+  const searchRealRoutes = async (
+    originText: string,
+    destinationText: string,
+    originCoords?: { lng: number; lat: number } | null,
+    destinationCoords?: { lng: number; lat: number } | null
+  ) => {
+    setIsLoadingRoutes(true);
+    setRealRoutes(null);
+
+    try {
+      // Step 1: Geocode origin if no coordinates provided
+      let originLngLat = originCoords;
+      if (!originLngLat) {
+        const originResults = await mapboxService.getAddressSuggestions(
+          originText,
+          MANAUS_CENTER.lng ? [MANAUS_CENTER.lng, MANAUS_CENTER.lat] : undefined,
+          { limit: 1, language: language as 'pt' | 'en' | 'es' }
+        );
+        if (originResults.length === 0) {
+          toast.error('Origem não encontrada');
+          setIsLoadingRoutes(false);
+          return;
+        }
+        originLngLat = { lng: originResults[0].lng, lat: originResults[0].lat };
+        setOriginCoords(originLngLat);
+      }
+
+      // Step 2: Geocode destination if no coordinates provided
+      let destLngLat = destinationCoords;
+      if (!destLngLat) {
+        const destResults = await mapboxService.getAddressSuggestions(
+          destinationText,
+          originLngLat ? [originLngLat.lng, originLngLat.lat] : undefined,
+          { limit: 1, language: language as 'pt' | 'en' | 'es' }
+        );
+        if (destResults.length === 0) {
+          toast.error('Destino não encontrado');
+          setIsLoadingRoutes(false);
+          return;
+        }
+        destLngLat = { lng: destResults[0].lng, lat: destResults[0].lat };
+        setDestinationCoords(destLngLat);
+      }
+
+      // Step 3: Calculate multiple driving routes and pick best alternatives
+      const routeResponse = await mapboxService.getRoute({
+        origin: [originLngLat.lng, originLngLat.lat],
+        destination: [destLngLat.lng, destLngLat.lat],
+        profile: 'driving',
+        steps: true,
+        alternatives: true, // Get up to 3 alternative routes
+        language: language as 'pt' | 'en' | 'es',
+      }).catch((error) => {
+        console.error('Erro detalhado ao calcular rota:', error);
+        return null;
+      });
+
+      if (!routeResponse) {
+        toast.error('Erro ao calcular rotas');
+        setIsLoadingRoutes(false);
+        return;
+      }
+
+      // Step 4: Analyze all routes (main + alternatives) and format with REAL safety analysis
+      const formattedRoutes: RouteData[] = [];
+
+      // Collect all routes to analyze
+      const allRoutes = [
+        routeResponse,
+        ...(routeResponse.alternatives || [])
+      ].filter(r => r.geometry);
+
+      // Analyze safety for each route
+      const analyzedRoutes = allRoutes.map(route => ({
+        route,
+        safety: analyzeRouteSafety(route.geometry),
+      }));
+
+      // Sort by safety score (safest first)
+      analyzedRoutes.sort((a, b) => b.safety.safetyScore - a.safety.safetyScore);
+
+      // Format up to 3 routes
+      const routesToShow = analyzedRoutes.slice(0, 3);
+
+      routesToShow.forEach((analyzed, index) => {
+        const { route, safety } = analyzed;
+        const safetyWarnings = formatSafetyWarnings(safety);
+
+        // Determinar nome/ícone baseado na posição e score
+        let routeName, routeIcon, routeGradient, routeDesc;
+
+        if (index === 0) {
+          // Primeira rota (mais segura)
+          routeName = t("routes.safestRoute", language);
+          routeIcon = "🛡️";
+          routeGradient = "from-green-500 to-green-600";
+          routeDesc = t("routes.safestDesc", language);
+        } else if (index === 1) {
+          // Segunda rota (equilibrada)
+          routeName = t("routes.balancedRoute", language);
+          routeIcon = "⚖️";
+          routeGradient = "from-yellow-500 to-orange-500";
+          routeDesc = t("routes.balancedDesc", language);
+        } else {
+          // Terceira rota (mais rápida)
+          routeName = t("routes.fastestRoute", language);
+          routeIcon = "⚡";
+          routeGradient = "from-blue-500 to-blue-600";
+          routeDesc = t("routes.fastestDesc", language);
+        }
+
+        formattedRoutes.push({
+          name: routeName,
+          distance: mapboxService.formatDistance(route.distance),
+          time: mapboxService.formatDuration(route.duration),
+          risk: safety.riskLevel,
+          warnings: safety.warningsCount,
+          safetyScore: safety.safetyScore,
+          icon: routeIcon,
+          gradient: routeGradient,
+          description: routeDesc,
+          steps: route.steps ? formatSteps(route.steps, destinationText, safetyWarnings) : [],
+          geometry: route.geometry,
+        });
+      });
+
+      if (formattedRoutes.length === 0) {
+        toast.error('Nenhuma rota encontrada');
+      } else {
+        setRealRoutes(formattedRoutes);
+        setShowResults(true);
+        toast.success(`${formattedRoutes.length} rotas encontradas`);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar rotas:', error);
+      toast.error('Erro ao calcular rotas');
+    } finally {
+      setIsLoadingRoutes(false);
+    }
+  };
+
+  /**
+   * Formata steps da API Mapbox para o formato esperado
+   */
+  const formatSteps = (
+    apiSteps: Array<{ distance: number; duration: number; instruction: string }>,
+    destinationText: string,
+    safetyWarnings: string[] = []
+  ): RouteStep[] => {
+    const steps = apiSteps.slice(0, -1).map((step, idx) => {
+      const instruction = step.instruction;
+      let icon: "straight" | "right" | "left" | "arrive" = "straight";
+
+      if (instruction.toLowerCase().includes("direita") || instruction.toLowerCase().includes("right")) {
+        icon = "right";
+      } else if (instruction.toLowerCase().includes("esquerda") || instruction.toLowerCase().includes("left")) {
+        icon = "left";
+      }
+
+      // Adicionar avisos de segurança aos primeiros passos (espaçados)
+      const warningIndex = Math.floor(idx / (apiSteps.length / Math.min(safetyWarnings.length, 3)));
+      const warning = safetyWarnings[warningIndex];
+
+      return {
+        instruction,
+        distance: mapboxService.formatDistance(step.distance),
+        icon,
+        street: `Passo ${idx + 1}`,
+        warning: warning || undefined,
+      };
+    });
+
+    // Add arrival step
+    steps.push({
+      instruction: "Chegou ao destino",
+      distance: "—",
+      icon: "arrive",
+      street: destinationText || "Destino",
+    });
+
+    return steps;
+  };
+
   const handleSearch = () => {
     if (origin && destination) {
       setShowResults(true);
       incrementRoutesSearched();
+      searchRealRoutes(origin, destination, originCoords, destinationCoords);
     }
   };
 
@@ -303,7 +462,8 @@ export function Routes() {
     setOrigin("Condomínio Reserva da Cidade, Cidade Nova 2");
   };
 
-  const routes: RouteData[] = [
+  // Use real routes if available, otherwise fallback to mock data
+  const routes: RouteData[] = realRoutes || [
     {
       name: t("routes.safestRoute", language),
       distance: "3.2 km",
@@ -362,6 +522,129 @@ export function Routes() {
       ],
     },
   ];
+
+  // Initialize map and draw route geometry when a route is selected
+  useEffect(() => {
+    if (selectedRouteIdx === null || !mapContainerRef.current) return;
+
+    const route = routes[selectedRouteIdx];
+    if (!route.geometry) return;
+
+    // Initialize map
+    if (!mapInstanceRef.current) {
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      mapInstanceRef.current = new mapboxgl.Map({
+        container: mapContainerRef.current,
+        style: isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
+        center: [MANAUS_CENTER.lng, MANAUS_CENTER.lat],
+        zoom: 12,
+        attributionControl: false,
+      });
+
+      // Add zoom controls
+      mapInstanceRef.current.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+    }
+
+    const map = mapInstanceRef.current;
+
+    const drawRoute = () => {
+      // Remove existing route layers/sources if any
+      if (map.getLayer('route-line')) map.removeLayer('route-line');
+      if (map.getLayer('route-outline')) map.removeLayer('route-outline');
+      if (map.getSource('route')) map.removeSource('route');
+
+      // Clear existing markers
+      const markers = document.querySelectorAll('.mapboxgl-marker');
+      markers.forEach(marker => marker.remove());
+
+      if (!route.geometry) return;
+
+      // Add route source
+      map.addSource('route', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: route.geometry,
+        },
+      });
+
+      // Add route outline (wider, darker)
+      map.addLayer({
+        id: 'route-outline',
+        type: 'line',
+        source: 'route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': theme === 'dark' ? '#1f2937' : '#334155',
+          'line-width': 8,
+          'line-opacity': 0.4,
+        },
+      });
+
+      // Add route line (main color based on route type)
+      const routeColor =
+        route.icon === '🛡️' ? '#10b981' : // green for safe
+        route.icon === '⚖️' ? '#f59e0b' : // amber for balanced
+        '#3b82f6'; // blue for fast
+
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': routeColor,
+          'line-width': 5,
+        },
+      });
+
+      // Add origin marker
+      if (originCoords) {
+        new mapboxgl.Marker({ color: '#2b7fff' })
+          .setLngLat([originCoords.lng, originCoords.lat])
+          .setPopup(new mapboxgl.Popup().setHTML(`<strong>Origem</strong><br/>${origin}`))
+          .addTo(map);
+      }
+
+      // Add destination marker
+      if (destinationCoords) {
+        new mapboxgl.Marker({ color: '#10b981' })
+          .setLngLat([destinationCoords.lng, destinationCoords.lat])
+          .setPopup(new mapboxgl.Popup().setHTML(`<strong>Destino</strong><br/>${destination}`))
+          .addTo(map);
+      }
+
+      // Fit bounds to show entire route
+      const coordinates = route.geometry.coordinates as [number, number][];
+      const bounds = coordinates.reduce(
+        (bounds, coord) => bounds.extend(coord as [number, number]),
+        new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
+      );
+      map.fitBounds(bounds, { padding: 50, duration: 1000 });
+    };
+
+    // Wait for map to load
+    if (map.loaded()) {
+      drawRoute();
+    } else {
+      map.on('load', drawRoute);
+    }
+
+    // Cleanup function
+    return () => {
+      if (selectedRouteIdx === null && mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [selectedRouteIdx, routes, theme, originCoords, destinationCoords, origin, destination]);
 
   const isDark = theme === "dark";
   const bgClass = isDark ? "bg-[#111827]" : "bg-[#f9fafb]";
@@ -459,12 +742,8 @@ export function Routes() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 relative z-10">
-          <div className={`rounded-2xl overflow-hidden mb-5 border ${cardBorder} h-[180px] relative`}>
-            <iframe
-              src={`https://www.openstreetmap.org/export/embed.html?bbox=${MANAUS_CENTER.lng - 0.025},${MANAUS_CENTER.lat - 0.025},${MANAUS_CENTER.lng + 0.025},${MANAUS_CENTER.lat + 0.025}&layer=mapnik&marker=${MANAUS_CENTER.lat},${MANAUS_CENTER.lng}`}
-              className="w-full h-full border-0"
-              title="Prévia da Rota"
-            />
+          <div className={`rounded-2xl overflow-hidden mb-5 border ${cardBorder} h-[240px] relative`}>
+            <div ref={mapContainerRef} className="w-full h-full" />
             <button
               onClick={() => handleToggleFavorite(selectedRouteIdx, route)}
               className={`absolute top-3 right-3 w-10 h-10 rounded-xl flex items-center justify-center active:scale-90 transition border shadow-sm ${isFav ? "bg-pink-500 border-pink-400 text-white" : isDark ? "bg-gray-800/90 border-gray-700 text-gray-300" : "bg-white/90 border-gray-200 text-gray-700"}`}
@@ -678,7 +957,7 @@ export function Routes() {
                               <IconCalendar className={`w-3.5 h-3.5 ${planned.isActive ? "text-emerald-500" : textSecondary}`} />
                             </button>
                             <button
-                              onClick={() => deletePlannedRoute(planned.id)}
+                              onClick={() => deletePlannedRouteLocal(planned.id)}
                               className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-50 hover:bg-gray-100 active:scale-90 transition"
                             >
                               <IconTrash className="w-3.5 h-3.5 text-red-400" />
@@ -942,7 +1221,17 @@ export function Routes() {
               </div>
             </div>
 
-            {routes.map((route, idx) => (
+            {/* Loading state */}
+            {isLoadingRoutes && (
+              <div className={`${cardBg} border ${cardBorder} p-8 rounded-2xl flex flex-col items-center justify-center gap-3`}>
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className={`${textPrimary} text-sm`}>Calculando rotas...</p>
+                <p className={`${textSecondary} text-xs`}>Buscando as melhores opções</p>
+              </div>
+            )}
+
+            {/* Route results */}
+            {!isLoadingRoutes && routes.map((route, idx) => (
               <motion.div key={idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
                 <div className={`${cardBg} border ${cardBorder} p-4 rounded-2xl`}>
                   <div className="flex items-start justify-between mb-3">

@@ -1,25 +1,6 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
-@import 'leaflet/dist/leaflet.css';
-
-/* ── Leaflet overrides (Tailwind preflight conflicts) ── */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  font-family: 'Poppins', sans-serif;
-}
-.leaflet-tile-pane img {
-  max-width: none !important;
-}
-.leaflet-control-zoom {
-  display: none !important;
-}
-.leaflet-control-attribution {
-  font-size: 9px !important;
-  opacity: 0.5;
-}
 
 /* ── Pulsing risk zone animation ── */
 @keyframes pulse-ring {
@@ -52,4 +33,13 @@
 @keyframes alert-flash {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.85; }
+}
+
+/* ── Hide scrollbar but keep scroll functionality ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
 }
