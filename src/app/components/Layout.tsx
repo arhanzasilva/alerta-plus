@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, type FC } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-hkfx6ct22z";
@@ -7,6 +7,83 @@ import { t } from "../context/translations";
 import { AchievementToast } from "./AchievementToast";
 
 const NAV_PATHS = ["/map", "/notifications", "/profile"];
+
+// ── Nav icons defined at module scope so they don't remount on Layout re-renders ──
+const NavMapIcon: FC<{ active: boolean }> = ({ active }) => (
+  <svg
+    className="w-7 h-7 lg:w-8 lg:h-8"
+    viewBox="0 0 22.3 20.55"
+    fill="none"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <path
+      d={svgPaths.p27229100}
+      fill={active ? "white" : "rgba(255,255,255,0.6)"}
+    />
+  </svg>
+);
+
+const NavAlertasIcon: FC<{ active: boolean }> = ({ active }) => (
+  <svg
+    className="w-7 h-7 lg:w-8 lg:h-8"
+    viewBox="0 0 27.98 27.98"
+    fill="none"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <path
+      d={svgPaths.p17014c00}
+      stroke="white"
+      strokeOpacity={active ? 1 : 0.6}
+      strokeWidth={2.72}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d={svgPaths.p380a63a0}
+      stroke="white"
+      strokeOpacity={active ? 1 : 0.6}
+      strokeWidth={2.72}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const NavPerfilIcon: FC<{ active: boolean }> = ({ active }) => (
+  <svg
+    className="w-7 h-7 lg:w-8 lg:h-8"
+    viewBox="0 0 28 28"
+    fill="none"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <g transform="translate(7.97, 2.14)">
+      <path
+        d={svgPaths.p3996a500}
+        stroke="white"
+        strokeOpacity={active ? 1 : 0.6}
+        strokeWidth={2.72}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+    <g transform="translate(4.47, 16.13)">
+      <path
+        d={svgPaths.p23ed7d80}
+        stroke="white"
+        strokeOpacity={active ? 1 : 0.6}
+        strokeWidth={2.72}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+  </svg>
+);
+
+const iconMap: Record<string, FC<{ active: boolean }>> = {
+  "/map": NavMapIcon,
+  "/notifications": NavAlertasIcon,
+  "/profile": NavPerfilIcon,
+};
 
 export function Layout() {
   const location = useLocation();
@@ -34,28 +111,9 @@ export function Layout() {
     setTransitionKey(location.pathname);
   }, [location.pathname]);
 
-  // Don't show navigation on onboarding, splash, or root redirect
-  if (location.pathname === "/" || location.pathname === "/onboarding" || location.pathname === "/splash") {
-    return (
-      <div className="fixed inset-0">
-        <AchievementToast />
-        <Outlet />
-      </div>
-    );
-  }
-
-  // Don't show navigation on settings or routes (full-screen pages)
-  if (location.pathname === "/settings" || location.pathname === "/routes") {
-    return (
-      <div className="fixed inset-0">
-        <AchievementToast />
-        <Outlet />
-      </div>
-    );
-  }
-
-  // Don't show navigation on report page (accessed via quick report flow)
-  if (location.pathname === "/report") {
+  // Full-screen pages: no nav bar
+  const fullScreenPaths = ["/", "/onboarding", "/splash", "/settings", "/routes", "/report"];
+  if (fullScreenPaths.includes(location.pathname)) {
     return (
       <div className="fixed inset-0">
         <AchievementToast />
@@ -69,82 +127,6 @@ export function Layout() {
     { path: "/notifications", label: t("nav.alerts", language) },
     { path: "/profile", label: t("nav.profile", language) },
   ];
-
-  const NavMapIcon = ({ active }: { active: boolean }) => (
-    <svg
-      className="w-7 h-7 lg:w-8 lg:h-8"
-      viewBox="0 0 22.3 20.55"
-      fill="none"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <path
-        d={svgPaths.p27229100}
-        fill={active ? "white" : "rgba(255,255,255,0.6)"}
-      />
-    </svg>
-  );
-
-  const NavAlertasIcon = ({ active }: { active: boolean }) => (
-    <svg
-      className="w-7 h-7 lg:w-8 lg:h-8"
-      viewBox="0 0 27.98 27.98"
-      fill="none"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <path
-        d={svgPaths.p17014c00}
-        stroke="white"
-        strokeOpacity={active ? 1 : 0.6}
-        strokeWidth={2.72}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d={svgPaths.p380a63a0}
-        stroke="white"
-        strokeOpacity={active ? 1 : 0.6}
-        strokeWidth={2.72}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const NavPerfilIcon = ({ active }: { active: boolean }) => (
-    <svg
-      className="w-7 h-7 lg:w-8 lg:h-8"
-      viewBox="0 0 28 28"
-      fill="none"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <g transform="translate(7.97, 2.14)">
-        <path
-          d={svgPaths.p3996a500}
-          stroke="white"
-          strokeOpacity={active ? 1 : 0.6}
-          strokeWidth={2.72}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </g>
-      <g transform="translate(4.47, 16.13)">
-        <path
-          d={svgPaths.p23ed7d80}
-          stroke="white"
-          strokeOpacity={active ? 1 : 0.6}
-          strokeWidth={2.72}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </g>
-    </svg>
-  );
-
-  const iconMap: Record<string, React.FC<{ active: boolean }>> = {
-    "/map": NavMapIcon,
-    "/notifications": NavAlertasIcon,
-    "/profile": NavPerfilIcon,
-  };
 
   return (
     <div className="flex flex-col lg:flex-row h-screen w-screen overflow-hidden">

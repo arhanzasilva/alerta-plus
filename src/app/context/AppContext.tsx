@@ -23,7 +23,6 @@ export interface UserProfile {
   name?: string;
   email?: string;
   neighborhood?: string;
-  password?: string;
   transportMode: "pedestrian" | "motorcycle" | "car";
   needs: ("wheelchair" | "reduced-mobility" | "stroller")[];
   timePreference: "day" | "night" | "both";
@@ -336,7 +335,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [favoriteRoutes, setFavoriteRoutes] = useState<FavoriteRoute[]>([]);
-  const [unlockedAchievementIds, setUnlockedAchievementIds] = useState<Set<string>>(new Set());
+  // Map<id, unlockedAt timestamp>
+  const [unlockedAchievementIds, setUnlockedAchievementIds] = useState<Map<string, number>>(new Map());
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [mapLayers, setMapLayers] = useState({
@@ -352,7 +352,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>("km");
   const [helpRequests, setHelpRequests] = useState<HelpRequest[]>([]);
 
-  const prevUnlockedRef = useRef<Set<string>>(new Set());
+  const prevUnlockedRef = useRef<Map<string, number>>(new Map());
+  const hasLoadedRef = useRef(false);
 
   // Derive auth status from profile state
   // guest = no profile (skipped onboarding or not started)
@@ -413,7 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const savedNotifications = localStorage.getItem("alertaplus_notifications");
     const savedHelpRequests = localStorage.getItem("alertaplus_help_requests");
 
-    if (savedProfile) {
+    try { if (savedProfile) {
       const parsed = JSON.parse(savedProfile);
       setUserProfileState({
         confirmationsGiven: 0,
@@ -421,25 +422,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         routesSearched: 0,
         ...parsed,
       });
-    }
-    if (savedOnboarded) setIsOnboarded(JSON.parse(savedOnboarded));
+    } } catch { /* ignore corrupted profile */ }
+    try { if (savedOnboarded) setIsOnboarded(JSON.parse(savedOnboarded)); } catch { /* ignore */ }
     if (savedTheme) setTheme(savedTheme as "light" | "dark");
     if (savedLanguage) setLanguageState(savedLanguage as Language);
     if (savedDistanceUnit) setDistanceUnitState(savedDistanceUnit as DistanceUnit);
-    if (savedFavorites) setFavoriteRoutes(JSON.parse(savedFavorites));
-    if (savedAchievements) {
-      const ids: string[] = JSON.parse(savedAchievements);
-      setUnlockedAchievementIds(new Set(ids));
-      prevUnlockedRef.current = new Set(ids);
-    }
-    if (savedNotifications) {
+    try { if (savedFavorites) setFavoriteRoutes(JSON.parse(savedFavorites)); } catch { /* ignore */ }
+    try { if (savedAchievements) {
+      const parsed = JSON.parse(savedAchievements);
+      const map = new Map<string, number>();
+      if (Array.isArray(parsed)) {
+        if (parsed.length > 0 && typeof parsed[0] === "string") {
+          // Legacy format: string[]
+          (parsed as string[]).forEach((id) => map.set(id, Date.now()));
+        } else {
+          // New format: {id, unlockedAt}[]
+          (parsed as {id: string; unlockedAt: number}[]).forEach((e) => map.set(e.id, e.unlockedAt));
+        }
+      }
+      setUnlockedAchievementIds(map);
+      prevUnlockedRef.current = map;
+    } } catch { /* ignore */ }
+    try { if (savedNotifications) {
       setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedNotifications) });
-    }
-    if (savedHelpRequests) {
+    } } catch { /* ignore */ }
+    try { if (savedHelpRequests) {
       setHelpRequests(JSON.parse(savedHelpRequests));
-    }
+    } } catch { /* ignore */ }
 
-    if (savedIncidents) {
+    hasLoadedRef.current = true;
+
+    try { if (savedIncidents) {
       setIncidents(JSON.parse(savedIncidents));
     } else {
       const sampleIncidents: Incident[] = [
@@ -533,11 +546,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       ];
       setIncidents(sampleIncidents);
-    }
+    } } catch { /* ignore */ }
   }, []);
 
-  // Save to localStorage
+  // Save to localStorage (guard against writing before load completes)
   useEffect(() => {
+    if (!hasLoadedRef.current) return;
     if (userProfile) {
       localStorage.setItem("alertaplus_profile", JSON.stringify(userProfile));
     } else {
@@ -546,10 +560,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userProfile]);
 
   useEffect(() => {
+    if (!hasLoadedRef.current) return;
     localStorage.setItem("alertaplus_onboarded", JSON.stringify(isOnboarded));
   }, [isOnboarded]);
 
   useEffect(() => {
+    if (!hasLoadedRef.current) return;
     localStorage.setItem("alertaplus_incidents", JSON.stringify(incidents));
   }, [incidents]);
 
@@ -571,7 +587,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [favoriteRoutes]);
 
   useEffect(() => {
-    localStorage.setItem("alertaplus_achievements", JSON.stringify([...unlockedAchievementIds]));
+    const entries = [...unlockedAchievementIds.entries()].map(([id, unlockedAt]) => ({ id, unlockedAt }));
+    localStorage.setItem("alertaplus_achievements", JSON.stringify(entries));
   }, [unlockedAchievementIds]);
 
   useEffect(() => {
@@ -588,7 +605,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newlyUnlocked: Achievement[] = [];
 
       ACHIEVEMENT_DEFS.forEach((def) => {
-        if (!prevUnlockedRef.current.has(def.id) && def.condition(profile, currentIncidents)) {
+        if (!prevUnlockedRef.current.has(def.id) && def.condition(profile, currentIncidents)) { // Map.has() works the same as Set.has()
           newlyUnlocked.push({
             id: def.id,
             name: def.name,
@@ -603,8 +620,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (newlyUnlocked.length > 0) {
         setUnlockedAchievementIds((prev) => {
-          const next = new Set(prev);
-          newlyUnlocked.forEach((a) => next.add(a.id));
+          const next = new Map(prev);
+          newlyUnlocked.forEach((a) => next.set(a.id, a.unlockedAt!));
           prevUnlockedRef.current = next;
           return next;
         });
@@ -636,9 +653,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  };
+  }, []);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
@@ -660,6 +677,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     setIncidents((prev) => [newIncident, ...prev]);
 
+    const impactDelta = Math.floor(Math.random() * 5) + 1;
     setUserProfileState((prev) => {
       if (!prev) return prev;
       const pointsMap = { low: 5, medium: 10, high: 15, critical: 20 };
@@ -669,7 +687,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         points: prev.points + points,
         reportsCount: prev.reportsCount + 1,
-        impactCount: prev.impactCount + Math.floor(Math.random() * 5) + 1,
+        impactCount: prev.impactCount + impactDelta,
         trustLevel: newTrust,
       };
     });
@@ -708,9 +726,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleMapLayer = (layer: keyof typeof mapLayers) => {
+  const toggleMapLayer = useCallback((layer: keyof typeof mapLayers) => {
     setMapLayers((prev) => ({ ...prev, [layer]: !prev[layer] }));
-  };
+  }, []);
 
   // ============= FAVORITE ROUTES =============
   const addFavoriteRoute = useCallback((route: FavoriteRoute) => {
@@ -758,7 +776,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Build unlocked achievements list
+  // Build unlocked achievements list (Map preserves unlockedAt timestamp)
   const unlockedAchievements: Achievement[] = ACHIEVEMENT_DEFS
     .filter((def) => unlockedAchievementIds.has(def.id))
     .map((def) => ({
@@ -768,6 +786,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       icon: def.icon,
       gradient: def.gradient,
       category: def.category,
+      unlockedAt: unlockedAchievementIds.get(def.id),
     }));
 
   return (

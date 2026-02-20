@@ -26,7 +26,6 @@ export function Register() {
   const tc = useThemeClasses(theme);
 
   const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,17 +34,6 @@ export function Register() {
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // Format birth date input as DD/MM/YYYY
-  const handleBirthDateChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 8);
-    let formatted = "";
-    if (digits.length > 0) formatted = digits.slice(0, 2);
-    if (digits.length > 2) formatted += "/" + digits.slice(2, 4);
-    if (digits.length > 4) formatted += "/" + digits.slice(4, 8);
-    setBirthDate(formatted);
-    setError("");
-  };
 
   const handleCreateAccount = () => {
     if (isLoading) return;
@@ -141,23 +129,6 @@ export function Register() {
                 value={name}
                 onChange={(e) => { setName(e.target.value); setError(""); }}
                 className={`w-full h-[50px] pl-11 pr-4 rounded-[14px] border text-[14px] font-['Poppins'] outline-none transition focus:ring-2 focus:ring-[#00bc7d]/30 focus:border-[#00bc7d] ${tc.inputBg}`}
-              />
-            </div>
-          </div>
-
-          {/* Birth date field */}
-          <div className="mb-3">
-            <label className={`block text-[12px] font-medium font-['Poppins'] ${tc.textSecondary} mb-1.5`}>
-              {t("register.birthDate", language)}
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder={t("register.birthDatePlaceholder", language)}
-                value={birthDate}
-                onChange={(e) => handleBirthDateChange(e.target.value)}
-                className={`w-full h-[50px] pl-3 pr-4 rounded-[14px] border text-[14px] font-['Poppins'] outline-none transition focus:ring-2 focus:ring-[#00bc7d]/30 focus:border-[#00bc7d] ${tc.inputBg}`}
               />
             </div>
           </div>

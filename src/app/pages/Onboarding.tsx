@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
@@ -127,7 +127,7 @@ function FeatureItem({
   title: string;
   desc: string;
 }) {
-  const iconPaths: Record<string, React.ReactNode> = {
+  const iconPaths: Record<string, ReactNode> = {
     location: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path
@@ -251,7 +251,7 @@ function ProfileStep({
                       : "bg-[#dbeafe] border-[1.5px] border-[#51a2ff]"
                     : isDark
                     ? "bg-gray-700/30 border-[1.5px] border-transparent"
-                    : "bg-white/18 border-[1.5px] border-transparent"
+                    : "bg-white/[18%] border-[1.5px] border-transparent"
                 } ${p.id === "night" ? "col-span-1" : ""}`}
               >
                 <span className="text-[60px] leading-[60px]">{p.emoji}</span>
@@ -458,7 +458,8 @@ function InfoStep({
             </label>
             {needOptions.map((opt) => {
               const isActive = needs.includes(opt.id);
-              const label = t(`onboarding.need.${opt.id.replace("-", "")}`, language);
+              const needKeyMap: Record<string, string> = { "wheelchair": "wheelchair", "reduced-mobility": "reducedMobility", "stroller": "stroller" };
+              const label = t(`onboarding.need.${needKeyMap[opt.id] ?? opt.id}`, language);
               return (
                 <button
                   key={opt.id}

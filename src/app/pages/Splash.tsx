@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-h2odaglmib";
@@ -8,16 +8,16 @@ export function Splash() {
   const navigate = useNavigate();
   const { isOnboarded } = useApp();
 
+  // Keep a ref so the timer always reads the latest value without restarting
+  const isOnboardedRef = useRef(isOnboarded);
+  isOnboardedRef.current = isOnboarded;
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isOnboarded) {
-        navigate("/map", { replace: true });
-      } else {
-        navigate("/onboarding", { replace: true });
-      }
+      navigate(isOnboardedRef.current ? "/map" : "/onboarding", { replace: true });
     }, 2500);
     return () => clearTimeout(timer);
-  }, [navigate, isOnboarded]);
+  }, [navigate]);
 
   return (
     <div className="h-full w-full bg-[#0A2540] flex items-center justify-center">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
@@ -49,6 +49,18 @@ export function HelpFeedback() {
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropdownOpen]);
 
   const handleSend = () => {
     if (isLoading) return;
@@ -110,7 +122,7 @@ export function HelpFeedback() {
             <label className={`block text-[12px] font-medium font-['Poppins'] ${tc.textSecondary} mb-1.5`}>
               {t("help.helpType", language)}
             </label>
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -286,11 +298,7 @@ export function HelpFeedback() {
             <div className="flex gap-3 items-start">
               <IconInfoCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${tc.textSecondary}`} />
               <p className={`text-[12px] font-['Poppins'] ${tc.textSecondary} leading-[19.5px]`}>
-                {language === "pt"
-                  ? "Em caso de emergência real, ligue imediatamente para os números acima. Este formulário é para solicitações que serão encaminhadas à comunidade."
-                  : language === "es"
-                  ? "En caso de emergencia real, llame inmediatamente a los números anteriores. Este formulario es para solicitudes que serán enviadas a la comunidad."
-                  : "In a real emergency, call the numbers above immediately. This form is for requests that will be forwarded to the community."}
+                {t("help.infoText", language)}
               </p>
             </div>
           </div>

@@ -54,46 +54,6 @@ interface NotifItem {
   lng?: number;
 }
 
-// Timestamps fixos — calculados uma única vez no carregamento do módulo
-const COMMUNITY_NOTIFS_BASE: Omit<NotifItem, "read">[] = [
-  {
-    id: "comm-1",
-    title: "Alerta da comunidade",
-    message:
-      "3 pessoas confirmaram o alagamento na Av. Eduardo Ribeiro. Evite a região.",
-    time: Date.now() - 3600000 * 2,
-    type: "community",
-    severity: "high",
-    distance: 0, // recalculado no useMemo
-    lat: -3.121,
-    lng: -60.02,
-  },
-  {
-    id: "comm-2",
-    title: "Zona segura atualizada",
-    message:
-      "A Rua Monsenhor Coutinho agora tem iluminação restaurada, segundo 5 moradores.",
-    time: Date.now() - 3600000 * 4,
-    type: "community",
-    severity: "low",
-    distance: 0,
-    lat: -3.117,
-    lng: -60.024,
-  },
-];
-
-const SYSTEM_NOTIFS_BASE: Omit<NotifItem, "read">[] = [
-  {
-    id: "sys-1",
-    title: "Bem-vindo ao Alerta+",
-    message:
-      "Configure suas preferências de notificação para receber alertas relevantes.",
-    time: Date.now() - 86400000 * 2,
-    type: "system",
-    distance: 0,
-  },
-];
-
 const RADIUS_OPTIONS = [
   { label: "500m", value: 500 },
   { label: "1 km", value: 1000 },
@@ -104,7 +64,56 @@ const RADIUS_OPTIONS = [
 
 export function Notifications() {
   const { incidents, userLocation, theme, language, distanceUnit } = useApp();
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+
+  // Timestamps created once at component mount (not module load) to avoid drift
+  const [communityNotifsBase] = useState<Omit<NotifItem, "read">[]>(() => [
+    {
+      id: "comm-1",
+      title: "Alerta da comunidade",
+      message: "3 pessoas confirmaram o alagamento na Av. Eduardo Ribeiro. Evite a região.",
+      time: Date.now() - 3600000 * 2,
+      type: "community",
+      severity: "high",
+      distance: 0,
+      lat: -3.121,
+      lng: -60.02,
+    },
+    {
+      id: "comm-2",
+      title: "Zona segura atualizada",
+      message: "A Rua Monsenhor Coutinho agora tem iluminação restaurada, segundo 5 moradores.",
+      time: Date.now() - 3600000 * 4,
+      type: "community",
+      severity: "low",
+      distance: 0,
+      lat: -3.117,
+      lng: -60.024,
+    },
+  ]);
+  const [systemNotifsBase] = useState<Omit<NotifItem, "read">[]>(() => [
+    {
+      id: "sys-1",
+      title: "Bem-vindo ao Alerta+",
+      message: "Configure suas preferências de notificação para receber alertas relevantes.",
+      time: Date.now() - 86400000 * 2,
+      type: "system",
+      distance: 0,
+    },
+  ]);
+
+  // readIds persisted to localStorage so they survive navigation
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("alertaplus_read_notifs");
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem("alertaplus_read_notifs", JSON.stringify([...readIds]));
+  }, [readIds]);
+
   const [selectedRadius, setSelectedRadius] = useState(500);
   // Ticker: força re-render a cada 30s para atualizar labels de tempo
   const [, setTick] = useState(0);
@@ -122,7 +131,7 @@ export function Notifications() {
       .filter((i) => i.status === "active")
       .map((inc) => ({
         id: `notif-${inc.id}`,
-        title: getAlertTitle(inc.type),
+        title: getAlertTitle(inc.type, language),
         message: inc.description || inc.location.address,
         time: inc.timestamp,
         type: "alert" as const,
@@ -135,7 +144,7 @@ export function Notifications() {
         lng: inc.location.lng,
       }));
 
-    const communityNotifs: NotifItem[] = COMMUNITY_NOTIFS_BASE.map((n) => ({
+    const communityNotifs: NotifItem[] = communityNotifsBase.map((n) => ({
       ...n,
       read: readIds.has(n.id),
       distance: n.lat != null && n.lng != null
@@ -143,13 +152,13 @@ export function Notifications() {
         : 0,
     }));
 
-    const systemNotifs: NotifItem[] = SYSTEM_NOTIFS_BASE.map((n) => ({
+    const systemNotifs: NotifItem[] = systemNotifsBase.map((n) => ({
       ...n,
       read: readIds.has(n.id),
     }));
 
     return [...alertNotifs, ...communityNotifs, ...systemNotifs];
-  }, [incidents, readIds, userLocation]);
+  }, [incidents, readIds, userLocation, communityNotifsBase, systemNotifsBase, language]);
 
   // ─── Filter by radius and sort by distance ───
   const filteredNotifications = useMemo(() => {
@@ -186,12 +195,12 @@ export function Notifications() {
   const getTimeLabel = (time: number) => {
     const diff = Date.now() - time;
     const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "Agora";
-    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 1) return t("notif.now", language);
+    if (minutes < 60) return `${minutes} ${t("notif.min", language)}`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
+    if (hours < 24) return `${hours}${t("notif.h", language)}`;
     const days = Math.floor(hours / 24);
-    return `${days}d`;
+    return `${days}${t("notif.d", language)}`;
   };
 
   const getIcon = (notif: NotifItem) => {
@@ -237,20 +246,8 @@ export function Notifications() {
     }
   };
 
-  const getSeverityLabel = (sev: string) => {
-    switch (sev) {
-      case "critical":
-        return "Crítico";
-      case "high":
-        return "Alto";
-      case "medium":
-        return "Médio";
-      case "low":
-        return "Baixo";
-      default:
-        return "";
-    }
-  };
+  const getSeverityLabel = (sev: string) =>
+    t(`severity.${sev}`, language);
 
   // ─── Theme classes ───
   const isDark = theme === "dark";
@@ -280,7 +277,7 @@ export function Notifications() {
                 <IconBell className="w-5 h-5 text-[#2b7fff]" />
               </div>
               <div>
-                <h1 className={`text-[20px] ${textPrimary} font-['Poppins'] font-[Poppins] font-bold`}>
+                <h1 className={`text-[20px] ${textPrimary} font-['Poppins'] font-bold`}>
                   {t("alerts.nearby", language)}
                 </h1>
                 <div className="flex items-center gap-1.5">
@@ -447,14 +444,19 @@ export function Notifications() {
           {/* Bottom count summary */}
           {filteredNotifications.length > 0 && (
             <div className="px-5 md:px-6 py-4 md:py-6 flex items-center justify-center">
-            <p className={`text-[12px] ${textSecondary} font-['Poppins']`}>
-              {filteredNotifications.filter((n) => n.type !== "system").length} alerta
-              {filteredNotifications.filter((n) => n.type !== "system").length !== 1 ? "s" : ""}{" "}
-              {selectedRadius === Infinity
-                ? "no total"
-                : `num raio de ${selectedRadius < 1000 ? `${selectedRadius}m` : `${selectedRadius / 1000} km`}`}
-            </p>
-          </div>
+              {(() => {
+                const alertCount = filteredNotifications.filter((n) => n.type !== "system").length;
+                const distLabel = selectedRadius < 1000 ? `${selectedRadius}m` : `${selectedRadius / 1000} km`;
+                return (
+                  <p className={`text-[12px] ${textSecondary} font-['Poppins']`}>
+                    {alertCount} {t("notif.alert", language)}{alertCount !== 1 ? "s" : ""}{" "}
+                    {selectedRadius === Infinity
+                      ? t("notif.total", language)
+                      : `${t("notif.inRadius", language)} ${distLabel}`}
+                  </p>
+                );
+              })()}
+            </div>
           )}
         </div>
       </div>
@@ -462,27 +464,13 @@ export function Notifications() {
   );
 }
 
-function getAlertTitle(type: string): string {
-  switch (type) {
-    case "flood":
-      return "Alagamento detectado";
-    case "construction":
-      return "Obra na região";
-    case "obstacle":
-      return "Obstáculo na via";
-    case "accessibility":
-      return "Problema de acessibilidade";
-    case "no-light":
-      return "Sem iluminação";
-    case "crime":
-      return "Atividade suspeita";
-    case "danger-zone":
-      return "Zona perigosa";
-    case "theft":
-      return "Furto/Roubo";
-    case "assault":
-      return "Assalto reportado";
-    default:
-      return "Alerta";
-  }
+// Maps kebab-case incident types to camelCase translation keys
+const ALERT_TYPE_KEY_MAP: Record<string, string> = {
+  "no-light": "noLight",
+  "danger-zone": "dangerZone",
+};
+
+function getAlertTitle(type: string, lang: string): string {
+  const key = `alert.${ALERT_TYPE_KEY_MAP[type] ?? type}`;
+  return t(key, lang);
 }

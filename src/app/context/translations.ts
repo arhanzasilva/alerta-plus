@@ -227,6 +227,10 @@ const translations: Record<Language, Record<string, string>> = {
     // Notifications
     "notif.community": "Comunidade",
     "notif.now": "Agora",
+    "notif.min": "min",
+    "notif.h": "h",
+    "notif.d": "d",
+    "notif.alert": "alerta",
     "notif.total": "no total",
     "notif.inRadius": "num raio de",
 
@@ -368,6 +372,18 @@ const translations: Record<Language, Record<string, string>> = {
     "common.edit": "Editar",
     "common.confirm": "Confirmar",
 
+    // Alert titles (for Notifications)
+    "alert.flood": "Alagamento detectado",
+    "alert.construction": "Obra na região",
+    "alert.obstacle": "Obstáculo na via",
+    "alert.accessibility": "Problema de acessibilidade",
+    "alert.noLight": "Sem iluminação",
+    "alert.crime": "Atividade suspeita",
+    "alert.dangerZone": "Zona perigosa",
+    "alert.theft": "Furto/Roubo",
+    "alert.assault": "Assalto reportado",
+    "alert.generic": "Alerta",
+
     // Help & Feedback page
     "help.title": "Pedir Ajuda",
     "help.subtitle": "Selecione o tipo de ajuda necessária e envie sua solicitação",
@@ -394,6 +410,7 @@ const translations: Record<Language, Record<string, string>> = {
     "help.success": "Solicitação de ajuda enviada com sucesso!",
     "help.selectTypeError": "Selecione o tipo de ajuda",
     "help.commentRequired": "Adicione um comentário sobre a situação",
+    "help.infoText": "Em caso de emergência real, ligue imediatamente para os números acima. Este formulário é para solicitações que serão encaminhadas à comunidade.",
 
     // Help History
     "history.title": "Histórico de Solicitações",
@@ -632,6 +649,10 @@ const translations: Record<Language, Record<string, string>> = {
     // Notifications extras
     "notif.community": "Community",
     "notif.now": "Now",
+    "notif.min": "min",
+    "notif.h": "h",
+    "notif.d": "d",
+    "notif.alert": "alert",
     "notif.total": "total",
     "notif.inRadius": "within",
 
@@ -763,6 +784,21 @@ const translations: Record<Language, Record<string, string>> = {
     "navmode.arriving": "Arriving at destination",
     "navmode.recalculating": "Recalculating...",
     "navmode.endNavigation": "End navigation",
+
+    // Alert titles (for Notifications)
+    "alert.flood": "Flood detected",
+    "alert.construction": "Construction nearby",
+    "alert.obstacle": "Obstacle on road",
+    "alert.accessibility": "Accessibility issue",
+    "alert.noLight": "No lighting",
+    "alert.crime": "Suspicious activity",
+    "alert.dangerZone": "Danger zone",
+    "alert.theft": "Theft/Robbery",
+    "alert.assault": "Assault reported",
+    "alert.generic": "Alert",
+
+    // Help info text
+    "help.infoText": "In a real emergency, call the numbers above immediately. This form is for requests that will be forwarded to the community.",
 
     // Common
     "common.save": "Save",
@@ -999,6 +1035,10 @@ const translations: Record<Language, Record<string, string>> = {
     // Notifications extras
     "notif.community": "Comunidad",
     "notif.now": "Ahora",
+    "notif.min": "min",
+    "notif.h": "h",
+    "notif.d": "d",
+    "notif.alert": "alerta",
     "notif.total": "en total",
     "notif.inRadius": "en un radio de",
 
@@ -1166,6 +1206,7 @@ const translations: Record<Language, Record<string, string>> = {
     "help.success": "¡Solicitud de ayuda enviada con éxito!",
     "help.selectTypeError": "Selecciona el tipo de ayuda",
     "help.commentRequired": "Agrega un comentario sobre la situación",
+    "help.infoText": "En caso de emergencia real, llame inmediatamente a los números anteriores. Este formulario es para solicitudes que serán enviadas a la comunidad.",
 
     // Help History
     "history.title": "Historial de Solicitudes",
@@ -1177,6 +1218,18 @@ const translations: Record<Language, Record<string, string>> = {
     "history.newRequest": "Nueva Solicitud",
     "history.markResolved": "Marcar resuelto",
     "profile.helpHistory": "Mis Solicitudes",
+
+    // Alert titles (for Notifications)
+    "alert.flood": "Inundación detectada",
+    "alert.construction": "Obra en la región",
+    "alert.obstacle": "Obstáculo en la vía",
+    "alert.accessibility": "Problema de accesibilidad",
+    "alert.noLight": "Sin iluminación",
+    "alert.crime": "Actividad sospechosa",
+    "alert.dangerZone": "Zona peligrosa",
+    "alert.theft": "Robo",
+    "alert.assault": "Asalto reportado",
+    "alert.generic": "Alerta",
   },
 };
 
