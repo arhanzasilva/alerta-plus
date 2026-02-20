@@ -112,7 +112,7 @@ export function HelpHistory() {
   const navigate = useNavigate();
   const { theme, language, helpRequests, updateHelpRequestStatus } = useApp();
   const tc = useThemeClasses(theme);
-  const isDark = theme === "dark";
+  const isDark = tc.isDark;
 
   const pendingCount = helpRequests.filter((r) => r.status === "pending").length;
   const resolvedCount = helpRequests.filter((r) => r.status === "resolved").length;

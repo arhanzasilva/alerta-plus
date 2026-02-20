@@ -23,6 +23,13 @@ import {
   IconClipboardList,
 } from "@tabler/icons-react";
 
+const getTrustLevelLabel = (level: number) => {
+  if (level >= 4) return { label: "Veterano", color: "from-purple-500 to-purple-600" };
+  if (level >= 3) return { label: "Confiavel", color: "from-blue-500 to-blue-600" };
+  if (level >= 2) return { label: "Ativo", color: "from-green-500 to-green-600" };
+  return { label: "Iniciante", color: "from-gray-500 to-gray-600" };
+};
+
 export function Profile() {
   const {
     userProfile,
@@ -224,7 +231,7 @@ export function Profile() {
                   onClick={() => navigate("/login")}
                   className="w-full bg-white text-slate-900 py-3 rounded-xl font-bold text-[14px] hover:bg-gray-100 active:scale-[0.97] transition flex items-center justify-center gap-2.5"
                 >
-                  <IconMail className="w-4.5 h-4.5 text-slate-600" />
+                  <IconMail className="w-[18px] h-[18px] text-slate-600" />
                   {t("profile.emailLogin", language)}
                 </button>
               </div>
@@ -404,13 +411,6 @@ export function Profile() {
     );
   };
 
-  // ─── Trust Level Helper ───
-  const getTrustLevelLabel = (level: number) => {
-    if (level >= 4) return { label: "Veterano", color: "from-purple-500 to-purple-600" };
-    if (level >= 3) return { label: "Confiavel", color: "from-blue-500 to-blue-600" };
-    if (level >= 2) return { label: "Ativo", color: "from-green-500 to-green-600" };
-    return { label: "Iniciante", color: "from-gray-500 to-gray-600" };
-  };
 
   // ══════════════════════════════════════════════════════════
   //  ESTADO 0: Visitante (guest)

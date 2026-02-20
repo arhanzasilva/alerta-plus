@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   IconArrowUp,
@@ -200,8 +200,15 @@ export function NavigationMode({
   const totalTimeSeconds = parseTimeToSeconds(route.time);
 
   // Calculate cumulative distances for each step
-  const stepDistances = route.steps.map((s) => parseDistanceToMeters(s.distance));
-  const totalStepDistance = stepDistances.reduce((a, b) => a + b, 0) || totalDistanceMeters;
+  // Memoized to keep a stable reference and avoid re-registering the GPS watch on every render
+  const stepDistances = useMemo(
+    () => route.steps.map((s) => parseDistanceToMeters(s.distance)),
+    [route.steps]
+  );
+  const totalStepDistance = useMemo(
+    () => stepDistances.reduce((a, b) => a + b, 0) || totalDistanceMeters,
+    [stepDistances, totalDistanceMeters]
+  );
 
   // Calculate how much distance has been covered
   const coveredDistance = useCallback(() => {
@@ -231,17 +238,9 @@ export function NavigationMode({
 
   // Initialize Mapbox map
   useEffect(() => {
-    if (!mapContainerRef.current) {
-      console.log('NavigationMode: mapContainerRef.current is null');
-      return;
-    }
+    if (!mapContainerRef.current) return;
+    if (mapInstanceRef.current) return;
 
-    if (mapInstanceRef.current) {
-      console.log('NavigationMode: Map already initialized');
-      return;
-    }
-
-    console.log('NavigationMode: Initializing Mapbox map');
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
     const map = new mapboxgl.Map({
@@ -253,8 +252,6 @@ export function NavigationMode({
       bearing: 0,
       attributionControl: false,
     });
-
-    console.log('NavigationMode: Mapbox map created successfully');
 
     // Add zoom controls
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
@@ -490,7 +487,7 @@ export function NavigationMode({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isPaused, hasArrived, route.steps.length, totalDistanceMeters, totalTimeSeconds]);
+  }, [useGPS, isPaused, hasArrived, route.steps.length, totalDistanceMeters, totalTimeSeconds]);
 
   const currentStep = route.steps[currentStepIdx];
   const nextStep = currentStepIdx + 1 < route.steps.length ? route.steps[currentStepIdx + 1] : null;

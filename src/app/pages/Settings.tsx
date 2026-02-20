@@ -130,6 +130,8 @@ export function Settings() {
   const [registerError, setRegisterError] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isPublicProfile, setIsPublicProfile] = useState(true);
+  const [isShareLocation, setIsShareLocation] = useState(true);
 
   // Edit modal state for account fields
   const [editField, setEditField] = useState<"name" | "email" | "neighborhood" | "password" | null>(null);
@@ -935,7 +937,7 @@ export function Settings() {
               <div className="mb-3">
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Senha atual</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-4.5 h-4.5 text-gray-400" /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-[18px] h-[18px] text-gray-400" /></div>
                   <input type="password" placeholder="Senha atual" value={editOldPassword} onChange={(e) => { setEditOldPassword(e.target.value); setEditError(""); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                 </div>
               </div>
@@ -947,10 +949,10 @@ export function Settings() {
               </label>
               <div className="relative">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                  {editField === "name" && <IconUserCircle className="w-4.5 h-4.5 text-gray-400" />}
-                  {editField === "email" && <IconAt className="w-4.5 h-4.5 text-gray-400" />}
-                  {editField === "neighborhood" && <IconMapPin className="w-4.5 h-4.5 text-gray-400" />}
-                  {isPassword && <IconKey className="w-4.5 h-4.5 text-gray-400" />}
+                  {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
+                  {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
+                  {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
+                  {isPassword && <IconKey className="w-[18px] h-[18px] text-gray-400" />}
                 </div>
                 <input
                   type={isPassword ? "password" : editField === "email" ? "email" : "text"}
@@ -967,7 +969,7 @@ export function Settings() {
               <div className="mb-3">
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Confirmar nova senha</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-4.5 h-4.5 text-gray-400" /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-[18px] h-[18px] text-gray-400" /></div>
                   <input type="password" placeholder="Repita a nova senha" value={editValue2} onChange={(e) => { setEditValue2(e.target.value); setEditError(""); }} onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                 </div>
               </div>
@@ -1000,7 +1002,7 @@ export function Settings() {
     // Derive logged-in state from both local flag and global profile
     const effectiveLoggedIn = isLoggedIn || !!(userProfile?.email);
     const effectiveEmail = loggedInEmail || userProfile?.email || "";
-    const effectiveMethod = loggedInMethod || userProfile?.loginMethod || "email";
+    const effectiveMethod = userProfile?.loginMethod || loggedInMethod || "email";
 
     // === Logged-in view ===
     if (effectiveLoggedIn) {
@@ -1040,7 +1042,7 @@ export function Settings() {
             </div>
             <div className="px-5 pt-5">
               <button type="button" onClick={handleLogout} className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl border font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition ${isDark ? "border-red-500/30 text-red-400 active:bg-red-500/10" : "border-red-200 text-red-500 active:bg-red-50"}`}>
-                <IconLogout className="w-4.5 h-4.5" />Sair da conta
+                <IconLogout className="w-[18px] h-[18px]" />Sair da conta
               </button>
             </div>
           </div>
@@ -1099,7 +1101,7 @@ export function Settings() {
               <div>
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Nome completo</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconUserCircle className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconUserCircle className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                   <input type="text" placeholder="Seu nome" value={registerName} onChange={(e) => { setRegisterName(e.target.value); setRegisterError(""); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                 </div>
               </div>
@@ -1107,7 +1109,7 @@ export function Settings() {
               <div>
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>E-mail</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconMail className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconMail className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                   <input type="email" placeholder="seu@email.com" value={registerEmail} onChange={(e) => { setRegisterEmail(e.target.value); setRegisterError(""); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                 </div>
               </div>
@@ -1115,10 +1117,10 @@ export function Settings() {
               <div>
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Senha</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                   <input type={showRegisterPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" value={registerPassword} onChange={(e) => { setRegisterPassword(e.target.value); setRegisterError(""); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                   <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
-                    {showRegisterPassword ? <IconEyeOff className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                    {showRegisterPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
                   </button>
                 </div>
               </div>
@@ -1126,10 +1128,10 @@ export function Settings() {
               <div>
                 <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Confirmar senha</label>
                 <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                   <input type={showRegisterConfirmPassword ? "text" : "password"} placeholder="Repita a senha" value={registerConfirmPassword} onChange={(e) => { setRegisterConfirmPassword(e.target.value); setRegisterError(""); }} onKeyDown={(e) => { if (e.key === "Enter") handleRegister(); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                   <button type="button" onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
-                    {showRegisterConfirmPassword ? <IconEyeOff className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                    {showRegisterConfirmPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
                   </button>
                 </div>
               </div>
@@ -1235,17 +1237,17 @@ export function Settings() {
             <div>
               <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>E-mail</label>
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconMail className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconMail className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                 <input type="email" placeholder="seu@email.com" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(""); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
               </div>
             </div>
             <div>
               <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Senha</label>
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
                 <input type={showPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(""); }} onKeyDown={(e) => { if (e.key === "Enter") handleEmailLogin(); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
-                  {showPassword ? <IconEyeOff className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-4.5 h-4.5 ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                  {showPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
                 </button>
               </div>
             </div>
@@ -1296,16 +1298,16 @@ export function Settings() {
         label: "Perfil público",
         iconBg: "bg-indigo-500",
         toggle: true,
-        toggleValue: true,
-        onToggle: () => toast("Opção alternada"),
+        toggleValue: isPublicProfile,
+        onToggle: () => setIsPublicProfile((v) => !v),
       },
       {
         icon: IconMapPin,
         label: "Compartilhar localização",
         iconBg: "bg-red-500",
         toggle: true,
-        toggleValue: true,
-        onToggle: () => toast("Opção alternada"),
+        toggleValue: isShareLocation,
+        onToggle: () => setIsShareLocation((v) => !v),
       },
     ]);
   }
@@ -2023,7 +2025,7 @@ export function Settings() {
               }}
               className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-pink-500 text-white font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition"
             >
-              <IconShare className="w-4.5 h-4.5" />
+              <IconShare className="w-[18px] h-[18px]" />
               Mais opções de compartilhamento
             </button>
           </div>
@@ -2057,7 +2059,6 @@ export function Settings() {
       items: [
         { icon: IconBell, label: t("settings.notifications", language), iconBg: "bg-purple-500", view: "notifications" },
         { icon: IconRoute, label: t("settings.plannedRoutes", language), iconBg: "bg-blue-500", action: () => { navigate("/routes"); } },
-        { icon: IconClock, label: t("settings.reminders", language), iconBg: "bg-red-500", view: "reminders" },
       ],
     },
     {
