@@ -344,7 +344,7 @@ export function MapView() {
     if (isInitial || hasFlownToUserRef.current) return;
 
     hasFlownToUserRef.current = true;
-    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, essential: true, duration: 1400 });
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 18, essential: true, duration: 1400 });
   }, [userLocation]);
 
   // Render incident overlays (zones + markers)
