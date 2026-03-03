@@ -88,10 +88,12 @@ const iconMap: Record<string, FC<{ active: boolean }>> = {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { incidents, language, theme } = useApp();
+  const { incidents, language, theme, dismissedNotifIds, readNotifIds } = useApp();
 
-  // Count active alerts for badge
-  const activeAlertCount = incidents.filter((i) => i.status === "active").length;
+  // Badge: active incidents not yet dismissed or read by the user
+  const activeAlertCount = incidents.filter(
+    (i) => i.status === "active" && !dismissedNotifIds.has(`notif-${i.id}`) && !readNotifIds.has(`notif-${i.id}`)
+  ).length;
 
   // Track navigation direction for slide animations
   const prevPathIdxRef = useRef(-1);

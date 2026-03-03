@@ -44,6 +44,10 @@ import {
   IconBarbell,
   IconSchool,
   IconNavigation,
+  IconThumbUp,
+  IconThumbDown,
+  IconUser,
+  IconShield,
 } from "@tabler/icons-react";
 
 // Initialize Mapbox token
@@ -154,6 +158,22 @@ const SEVERITY_LEVELS = [
   { id: "critical", label: "Critico", dots: 4, color: "#EF4444" },
 ];
 
+// ─── Incident type icon helper ───
+function getIncidentIcon(type: string, size = 28) {
+  switch (type) {
+    case "crime":       return <IconAlertTriangle size={size} />;
+    case "danger-zone": return <IconAlertOctagon size={size} />;
+    case "theft":       return <IconWallet size={size} />;
+    case "assault":     return <IconHandStop size={size} />;
+    case "flood":       return <IconDroplet size={size} />;
+    case "no-light":    return <IconBulbOff size={size} />;
+    case "construction":return <IconCrane size={size} />;
+    case "obstacle":    return <IconBarrierBlock size={size} />;
+    case "accessibility":return <IconWheelchair size={size} />;
+    default:            return <IconShield size={size} />;
+  }
+}
+
 // ─── Filter which incidents are visible based on map layer toggles ───
 function filterVisibleIncidents(
   incidents: Incident[],
@@ -161,6 +181,8 @@ function filterVisibleIncidents(
 ): Incident[] {
   return incidents.filter((inc) => {
     if (inc.status !== "active") return false;
+    // Official (SSP/Defesa Civil) alerts always visible regardless of layer toggles
+    if (inc.id.startsWith("seed-")) return true;
     if (SECURITY_TYPES.includes(inc.type) && !mapLayers.crimeZones) return false;
     if (inc.type === "flood" && !mapLayers.floods) return false;
     if (inc.type === "no-light" && !mapLayers.noLight) return false;
@@ -180,7 +202,7 @@ interface ProximityInfo {
 }
 
 export function MapView() {
-  const { mapLayers, toggleMapLayer, addIncident, userLocation, incidents, theme, language, distanceUnit, userProfile } = useApp();
+  const { mapLayers, toggleMapLayer, addIncident, confirmIncident, denyIncident, userLocation, incidents, theme, language, distanceUnit, userProfile } = useApp();
   const isDark = theme === "dark";
   const navigate = useNavigate();
   const { history, addToHistory, removeFromHistory, clearHistory } = useSearchHistory();
@@ -208,6 +230,7 @@ export function MapView() {
   const [showAlertDetails, setShowAlertDetails] = useState(false);
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
   // Style version – incremented after map.setStyle() finishes loading, to force overlay re-render
   const [styleVersion, setStyleVersion] = useState(0);
@@ -229,7 +252,7 @@ export function MapView() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const incidentMarkersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup }>>(new Map());
+  const incidentMarkersRef = useRef<Map<string, { marker: mapboxgl.Marker }>>(new Map());
   const clickedMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const hasFlownToUserRef = useRef(false);
   const initialUserLocationRef = useRef(userLocation);
@@ -238,6 +261,12 @@ export function MapView() {
   const visibleIncidents = useMemo(
     () => filterVisibleIncidents(incidents, mapLayers),
     [incidents, mapLayers]
+  );
+
+  // Derive selected incident reactively so confirm/deny counts update in real time
+  const selectedIncident = useMemo(
+    () => (selectedIncidentId ? incidents.find((i) => i.id === selectedIncidentId) ?? null : null),
+    [selectedIncidentId, incidents]
   );
 
   // Initialize Mapbox map
@@ -261,6 +290,7 @@ export function MapView() {
     map.on('click', (e) => {
       const target = e.originalEvent?.target as HTMLElement;
       if (target?.closest?.('.mapboxgl-ctrl')) return;
+      if (target?.closest?.('.incident-marker')) return;
       setClickedCoords({ lng: e.lngLat.lng, lat: e.lngLat.lat });
     });
 
@@ -273,9 +303,8 @@ export function MapView() {
         clickedMarkerRef.current.remove();
         clickedMarkerRef.current = null;
       }
-      incidentMarkersRef.current.forEach(({ marker, popup }) => {
+      incidentMarkersRef.current.forEach(({ marker }) => {
         marker.remove();
-        popup.remove();
       });
       incidentMarkersRef.current.clear();
       map.remove();
@@ -343,9 +372,8 @@ export function MapView() {
     if (!map || !map.isStyleLoaded()) return;
 
     // Clear existing incident markers
-    incidentMarkersRef.current.forEach(({ marker, popup }) => {
+    incidentMarkersRef.current.forEach(({ marker }) => {
       marker.remove();
-      popup.remove();
     });
     incidentMarkersRef.current.clear();
 
@@ -400,46 +428,34 @@ export function MapView() {
     visibleIncidents.forEach((inc) => {
       const color = INCIDENT_COLORS[inc.type] || "#6B7280";
 
+      // Incidentes oficiais (SSP-AM / Defesa Civil / MANAUSTRANS) têm marcador quadrado
+      const isOfficial = inc.reportedBy?.includes("Sistema");
+
       // Create marker element
       const el = document.createElement("div");
       el.className = "incident-marker";
       el.style.cssText = `
-        width: 22px;
-        height: 22px;
+        width: ${isOfficial ? "20px" : "22px"};
+        height: ${isOfficial ? "20px" : "22px"};
         background: ${color};
         border: 3px solid white;
-        border-radius: 50%;
+        border-radius: ${isOfficial ? "5px" : "50%"};
         box-shadow: 0 2px 10px rgba(0,0,0,0.35), 0 0 0 4px ${color}33;
         cursor: pointer;
+        transform: ${isOfficial ? "rotate(45deg)" : "none"};
       `;
 
-      const severityLabel =
-        inc.severity === "critical" ? t("severity.critical", language) :
-        inc.severity === "high" ? t("severity.high", language) :
-        inc.severity === "medium" ? t("severity.medium", language) : t("severity.low", language);
-
-      // Create popup
-      const popup = new mapboxgl.Popup({
-        closeButton: false,
-        offset: 25,
-        className: isDark ? "mapbox-popup-dark" : "",
-      }).setHTML(
-        `<div style="font-family:Poppins,sans-serif;min-width:160px;padding:4px">` +
-        `<p style="font-size:13px;font-weight:700;color:${isDark ? '#f3f4f6' : '#0a2540'};margin:0 0 2px">${inc.description || inc.type}</p>` +
-        `<p style="font-size:11px;color:#6B7280;margin:0 0 4px">${inc.location.address}</p>` +
-        `<div style="display:flex;align-items:center;gap:6px">` +
-        `<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>` +
-        `<span style="font-size:10px;font-weight:500;color:${color}">${severityLabel}</span>` +
-        `<span style="font-size:10px;color:#9ca3af;margin-left:4px">${inc.confirmations} ${t("mapview.confirmations", language)}</span>` +
-        `</div></div>`
-      );
+      // Click opens React detail sheet
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setSelectedIncidentId(inc.id);
+      });
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([inc.location.lng, inc.location.lat])
-        .setPopup(popup)
         .addTo(map);
 
-      incidentMarkersRef.current.set(inc.id, { marker, popup });
+      incidentMarkersRef.current.set(inc.id, { marker });
     });
   }, [visibleIncidents, proximityAlert, isDark, styleVersion, language]);
 
@@ -1296,6 +1312,195 @@ export function MapView() {
           </motion.div>
           </>
         )}
+      </AnimatePresence>
+
+      {/* ═══ Incident Detail Sheet ═══ */}
+      <AnimatePresence>
+        {selectedIncident && (() => {
+          const inc = selectedIncident;
+          const color = INCIDENT_COLORS[inc.type] || "#6B7280";
+          const info = getAlertInfo(inc.type);
+          const isOfficial = inc.reportedBy?.includes("Sistema");
+          const sourceLabel = isOfficial ? inc.reportedBy?.split(" •")[0]?.trim() ?? "" : "";
+          const dist = userLocation
+            ? haversineDistance(userLocation.lat, userLocation.lng, inc.location.lat, inc.location.lng)
+            : null;
+          const severityLabel =
+            inc.severity === "critical" ? t("severity.critical", language) :
+            inc.severity === "high" ? t("severity.high", language) :
+            inc.severity === "medium" ? t("severity.medium", language) : t("severity.low", language);
+          const diff = Date.now() - inc.timestamp;
+          const mins = Math.floor(diff / 60000);
+          const timeAgo = mins < 1 ? "agora" : mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`;
+          const reporter = isOfficial ? sourceLabel : (inc.reportedBy || t("mapview.anonymous", language));
+
+          return (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="incident-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/40 z-[45]"
+                onClick={() => setSelectedIncidentId(null)}
+              />
+
+              {/* Sheet */}
+              <motion.div
+                key="incident-sheet"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                className={`absolute bottom-0 left-0 right-0 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:w-[480px] lg:rounded-3xl ${sheetBg} rounded-t-3xl z-[50] overflow-hidden shadow-2xl`}
+              >
+                {/* Color top bar */}
+                <div className="h-1 w-full" style={{ backgroundColor: color }} />
+
+                {/* Handle */}
+                <div className="flex justify-center pt-3 pb-1 lg:hidden">
+                  <div className={`w-10 h-1 ${isDark ? "bg-gray-600" : "bg-gray-300"} rounded-full`} />
+                </div>
+
+                {/* Header */}
+                <div className="px-5 pt-4 pb-4">
+                  <div className="flex items-start gap-3">
+                    {/* Icon box */}
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: color + "20", color }}
+                    >
+                      {getIncidentIcon(inc.type, 28)}
+                    </div>
+
+                    {/* Title + meta */}
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h2 className={`${sheetDarkTitle} text-[17px] font-bold font-['Poppins'] leading-tight`}>
+                          {info?.label || inc.type}
+                        </h2>
+                        {isOfficial && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold font-['Poppins']"
+                            style={{ background: color + "20", color }}
+                          >
+                            {sourceLabel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold font-['Poppins']"
+                          style={{ background: color + "18", color }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: color }} />
+                          {severityLabel}
+                        </span>
+                        {dist !== null && (
+                          <span className={`${sheetTextSec} text-[12px] font-['Poppins']`}>
+                            • {formatDistanceWithUnit(dist, distanceUnit)}
+                          </span>
+                        )}
+                        <span className={`${sheetTextMuted} text-[12px] font-['Poppins']`}>• {timeAgo}</span>
+                      </div>
+                    </div>
+
+                    {/* Close button */}
+                    <button
+                      onClick={() => setSelectedIncidentId(null)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-400"} hover:text-red-400 transition`}
+                    >
+                      <IconX size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className={`mx-5 h-px ${isDark ? "bg-gray-700/60" : "bg-gray-100"}`} />
+
+                {/* Body */}
+                <div className="px-5 py-4 space-y-3">
+                  {/* Description */}
+                  {inc.description && (
+                    <p className={`${sheetText} text-[14px] font-['Poppins'] leading-relaxed`}>
+                      {inc.description}
+                    </p>
+                  )}
+
+                  {/* Address */}
+                  <div className="flex items-start gap-2">
+                    <IconMapPin size={15} className={`${sheetTextMuted} mt-0.5 flex-shrink-0`} />
+                    <p className={`${sheetTextSec} text-[13px] font-['Poppins'] leading-snug`}>
+                      {inc.location.address}
+                    </p>
+                  </div>
+
+                  {/* Reporter */}
+                  <div className="flex items-center gap-2">
+                    <IconUser size={14} className={sheetTextMuted} />
+                    <span className={`${sheetTextMuted} text-[12px] font-['Poppins']`}>
+                      {t("mapview.reportedBy", language)}: <span className={sheetTextSec}>{reporter}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className={`mx-5 mb-4 rounded-2xl ${isDark ? "bg-gray-800" : "bg-gray-50"} flex`}>
+                  <div className="flex-1 flex flex-col items-center py-3">
+                    <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.confirmations}</p>
+                    <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.confirmations", language)}</p>
+                  </div>
+                  <div className={`w-px my-3 ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
+                  <div className="flex-1 flex flex-col items-center py-3">
+                    <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.denials}</p>
+                    <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.denials", language)}</p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="px-5 pb-3 flex gap-3">
+                  <button
+                    onClick={() => { confirmIncident(inc.id); toast.success(t("mapview.confirm", language) + "!"); }}
+                    className="flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 transition shadow-md"
+                  >
+                    <IconThumbUp size={18} className="text-white" />
+                    <span className="text-white text-[14px] font-bold font-['Poppins']">{t("mapview.confirm", language)}</span>
+                  </button>
+                  <button
+                    onClick={() => { denyIncident(inc.id); toast(t("mapview.contest", language)); }}
+                    className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 ${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} active:scale-95 transition`}
+                  >
+                    <IconThumbDown size={18} className={sheetTextSec} />
+                    <span className={`${sheetText} text-[14px] font-bold font-['Poppins']`}>{t("mapview.contest", language)}</span>
+                  </button>
+                </div>
+
+                {/* Navigate button */}
+                <div className="px-5 pb-8">
+                  <button
+                    onClick={() => {
+                      setSelectedIncidentId(null);
+                      navigate("/routes", {
+                        state: {
+                          origin: t("mapview.currentLocation", language),
+                          originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                          destination: inc.location.address,
+                          destinationCoords: { lng: inc.location.lng, lat: inc.location.lat },
+                          autoSearch: true,
+                        },
+                      });
+                    }}
+                    className="w-full h-12 bg-[#2b7fff] hover:bg-[#1a6fee] rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition shadow-md"
+                  >
+                    <IconNavigation size={18} className="text-white" />
+                    <span className="text-white text-[14px] font-semibold font-['Poppins']">{t("mapview.navigateHere", language)}</span>
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ═══ Alert Category Modal ═══ */}

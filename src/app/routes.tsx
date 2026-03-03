@@ -10,7 +10,7 @@ import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { HelpFeedback } from "./pages/HelpFeedback";
-import { HelpHistory } from "./pages/HelpHistory";
+
 import { Layout } from "./components/Layout";
 
 export const router = createBrowserRouter([
@@ -30,7 +30,7 @@ export const router = createBrowserRouter([
       { path: "login", Component: Login },
       { path: "register", Component: Register },
       { path: "help", Component: HelpFeedback },
-      { path: "help-history", Component: HelpHistory },
+
       { path: "*", element: <Navigate to="/map" replace /> },
     ],
   },

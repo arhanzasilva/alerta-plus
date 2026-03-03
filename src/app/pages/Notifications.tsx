@@ -11,6 +11,8 @@ import {
   IconMapPin,
   IconNavigation,
   IconRadar,
+  IconX,
+  IconTrash,
 } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
@@ -63,7 +65,7 @@ const RADIUS_OPTIONS = [
 ];
 
 export function Notifications() {
-  const { incidents, userLocation, theme, language, distanceUnit } = useApp();
+  const { incidents, userLocation, theme, language, distanceUnit, dismissedNotifIds, readNotifIds, dismissNotif, dismissNotifs, markNotifRead, markAllNotifsRead } = useApp();
 
   // Timestamps created once at component mount (not module load) to avoid drift
   const [communityNotifsBase] = useState<Omit<NotifItem, "read">[]>(() => [
@@ -101,18 +103,7 @@ export function Notifications() {
     },
   ]);
 
-  // readIds persisted to localStorage so they survive navigation
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem("alertaplus_read_notifs");
-      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-  useEffect(() => {
-    localStorage.setItem("alertaplus_read_notifs", JSON.stringify([...readIds]));
-  }, [readIds]);
+  // readIds and dismissedIds come from AppContext so Layout badge stays in sync
 
   const [selectedRadius, setSelectedRadius] = useState(500);
   // Ticker: força re-render a cada 30s para atualizar labels de tempo
@@ -137,7 +128,7 @@ export function Notifications() {
         type: "alert" as const,
         severity: inc.severity,
         alertType: inc.type,
-        read: readIds.has(`notif-${inc.id}`),
+        read: readNotifIds.has(`notif-${inc.id}`),
         incidentId: inc.id,
         distance: haversineDistance(userLat, userLng, inc.location.lat, inc.location.lng),
         lat: inc.location.lat,
@@ -146,7 +137,7 @@ export function Notifications() {
 
     const communityNotifs: NotifItem[] = communityNotifsBase.map((n) => ({
       ...n,
-      read: readIds.has(n.id),
+      read: readNotifIds.has(n.id),
       distance: n.lat != null && n.lng != null
         ? haversineDistance(userLat, userLng, n.lat, n.lng)
         : 0,
@@ -154,16 +145,19 @@ export function Notifications() {
 
     const systemNotifs: NotifItem[] = systemNotifsBase.map((n) => ({
       ...n,
-      read: readIds.has(n.id),
+      read: readNotifIds.has(n.id),
     }));
 
     return [...alertNotifs, ...communityNotifs, ...systemNotifs];
-  }, [incidents, readIds, userLocation, communityNotifsBase, systemNotifsBase, language]);
+  }, [incidents, readNotifIds, userLocation, communityNotifsBase, systemNotifsBase, language]);
 
-  // ─── Filter by radius and sort by distance ───
+  // ─── Filter by radius, sort, and exclude dismissed ───
   const filteredNotifications = useMemo(() => {
     return allNotifications
       .filter((n) => {
+        const isOfficial = n.id.startsWith("notif-seed-");
+        // Official (SSP/Defesa Civil) alerts are never dismissed
+        if (!isOfficial && dismissedNotifIds.has(n.id)) return false;
         // System notifications always show
         if (n.type === "system") return true;
         return n.distance <= selectedRadius;
@@ -179,18 +173,25 @@ export function Notifications() {
         if (aSev !== bSev) return aSev - bSev;
         return a.distance - b.distance;
       });
-  }, [allNotifications, selectedRadius]);
+  }, [allNotifications, selectedRadius, dismissedNotifIds]);
 
   const locationAlertCount = allNotifications.filter(
-    (n) => n.type !== "system" && n.distance <= selectedRadius
+    (n) => !dismissedNotifIds.has(n.id) && n.type !== "system" && n.distance <= selectedRadius
   ).length;
   const unreadCount = filteredNotifications.filter((n) => !n.read).length;
+  const readCount = filteredNotifications.filter((n) => n.read).length;
 
-  const markAsRead = (id: string) =>
-    setReadIds((prev) => new Set([...prev, id]));
+  const markAsRead = (id: string) => markNotifRead(id);
+  const markAllAsRead = () => markAllNotifsRead(filteredNotifications.map((n) => n.id));
 
-  const markAllAsRead = () =>
-    setReadIds(new Set(filteredNotifications.map((n) => n.id)));
+  const clearReadNotifs = () => {
+    const ids = filteredNotifications.filter((n) => n.read && !n.id.startsWith("notif-seed-")).map((n) => n.id);
+    dismissNotifs(ids);
+  };
+
+  const clearAllNotifs = () => {
+    dismissNotifs(filteredNotifications.filter((n) => !n.id.startsWith("notif-seed-")).map((n) => n.id));
+  };
 
   const getTimeLabel = (time: number) => {
     const diff = Date.now() - time;
@@ -291,14 +292,25 @@ export function Notifications() {
               </div>
             </div>
 
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="px-3 py-1.5 text-[11px] font-semibold text-[#2b7fff] bg-[#2b7fff]/10 rounded-full hover:bg-[#2b7fff]/20 active:scale-95 transition font-['Poppins']"
-              >
-                {t("alerts.readAll", language)}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="px-3 py-1.5 text-[11px] font-semibold text-[#2b7fff] bg-[#2b7fff]/10 rounded-full hover:bg-[#2b7fff]/20 active:scale-95 transition font-['Poppins']"
+                >
+                  {t("alerts.readAll", language)}
+                </button>
+              )}
+              {(readCount > 0 || filteredNotifications.length > 0) && (
+                <button
+                  onClick={readCount > 0 ? clearReadNotifs : clearAllNotifs}
+                  className={`px-3 py-1.5 text-[11px] font-semibold rounded-full active:scale-95 transition font-['Poppins'] flex items-center gap-1 ${isDark ? "text-gray-400 bg-gray-700/50 hover:bg-gray-700" : "text-gray-500 bg-gray-100 hover:bg-gray-200"}`}
+                >
+                  <IconTrash className="w-3 h-3" />
+                  {t("alerts.clear", language)}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -356,18 +368,19 @@ export function Notifications() {
               const isLocationBased = notif.type !== "system";
 
               return (
-                <motion.button
+                <motion.div
                   key={notif.id}
                   layout
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -40 }}
+                  exit={{ opacity: 0, x: -40, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  onClick={() => markAsRead(notif.id)}
-                  className={`w-full px-5 md:px-6 py-4 md:py-5 flex items-start gap-3 md:gap-4 border-b ${cardBorder} text-left transition active:scale-[0.99] hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${
-                    notif.read ? "opacity-40" : ""
-                  }`}
+                  className={`relative w-full flex items-start gap-3 md:gap-4 border-b ${cardBorder} ${notif.read ? "opacity-40" : ""}`}
                 >
+                  <button
+                    onClick={() => markAsRead(notif.id)}
+                    className="flex-1 px-5 md:px-6 py-4 md:py-5 flex items-start gap-3 md:gap-4 text-left transition active:scale-[0.99] hover:bg-gray-50/50 dark:hover:bg-gray-800/30 min-w-0"
+                  >
                   {/* Unread dot */}
                   <div className="w-2 flex-shrink-0 mt-4">
                     {!notif.read && (
@@ -435,7 +448,19 @@ export function Notifications() {
                       )}
                     </div>
                   </div>
-                </motion.button>
+                  </button>
+
+                  {/* Dismiss button — hidden for official (SSP/Defesa Civil) alerts */}
+                  {!notif.id.startsWith("notif-seed-") && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismissNotif(notif.id); }}
+                      className={`flex-shrink-0 self-center mr-3 w-7 h-7 rounded-full flex items-center justify-center transition active:scale-90 ${isDark ? "text-gray-500 hover:text-gray-300 hover:bg-gray-700" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
+                      aria-label="Dispensar notificação"
+                    >
+                      <IconX className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </motion.div>
               );
             })
             )}

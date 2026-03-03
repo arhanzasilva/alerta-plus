@@ -195,6 +195,8 @@ export function NavigationMode({
   const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const geoWatchIdRef = useRef<number | null>(null);
+  const destMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const isMapInitializedRef = useRef(false);
 
   const totalDistanceMeters = parseDistanceToMeters(route.distance);
   const totalTimeSeconds = parseTimeToSeconds(route.time);
@@ -266,9 +268,19 @@ export function NavigationMode({
     // Add zoom controls
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
 
-    // Wait for map to load before drawing route
-    map.on('load', () => {
-      // Add route geometry if available
+    // Draw route on map — called on every style load (initial + theme changes)
+    const drawRouteOnMap = () => {
+      // Clean up existing route layers/source before re-adding
+      if (map.getLayer('route-line')) map.removeLayer('route-line');
+      if (map.getLayer('route-outline')) map.removeLayer('route-outline');
+      if (map.getSource('route')) map.removeSource('route');
+
+      // Clean up existing destination marker
+      if (destMarkerRef.current) {
+        destMarkerRef.current.remove();
+        destMarkerRef.current = null;
+      }
+
       if (route.geometry) {
         map.addSource('route', {
           type: 'geojson',
@@ -279,7 +291,7 @@ export function NavigationMode({
           },
         });
 
-        // Route outline
+        // Route outline (shadow)
         map.addLayer({
           id: 'route-outline',
           type: 'line',
@@ -290,12 +302,12 @@ export function NavigationMode({
           },
           paint: {
             'line-color': '#0a2540',
-            'line-width': 8,
-            'line-opacity': 0.6,
+            'line-width': 10,
+            'line-opacity': 0.5,
           },
         });
 
-        // Route line
+        // Route line (main — blue)
         map.addLayer({
           id: 'route-line',
           type: 'line',
@@ -306,41 +318,50 @@ export function NavigationMode({
           },
           paint: {
             'line-color': '#2b7fff',
-            'line-width': 5,
+            'line-width': 6,
           },
         });
 
-        // Fit bounds to route
+        // Fit map to show the entire route
         const coordinates = route.geometry.coordinates as [number, number][];
         const bounds = coordinates.reduce(
-          (bounds, coord) => bounds.extend(coord),
+          (b, coord) => b.extend(coord),
           new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
         );
-        map.fitBounds(bounds, { padding: 100, duration: 0 });
-      }
+        map.fitBounds(bounds, { padding: 80, duration: 1200 });
 
-      // Add destination marker
-      if (route.geometry) {
-        const coords = route.geometry.coordinates as [number, number][];
-        const destCoord = coords[coords.length - 1];
-        new mapboxgl.Marker({ color: '#10b981' })
+        // Destination marker (green flag)
+        const destCoord = coordinates[coordinates.length - 1];
+        destMarkerRef.current = new mapboxgl.Marker({ color: '#10b981' })
           .setLngLat(destCoord)
           .addTo(map);
       }
-    });
+    };
+
+    // style.load fires on initial load AND after every setStyle (theme change)
+    map.on('style.load', drawRouteOnMap);
 
     mapInstanceRef.current = map;
 
     return () => {
+      destMarkerRef.current = null;
+      isMapInitializedRef.current = false;
       map.remove();
       mapInstanceRef.current = null;
     };
   }, [mapCenter, route.geometry]);
 
-  // Sync map style when theme changes
+  // Sync map style when theme changes.
+  // Skip the first run (mount) since the map is already created with the correct style.
+  // After setStyle, the style.load event re-fires and drawRouteOnMap re-draws the route.
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    mapInstanceRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/navigation-day-v1');
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (!isMapInitializedRef.current) {
+      isMapInitializedRef.current = true;
+      return;
+    }
+    map.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/navigation-day-v1');
   }, [isDark]);
 
   // GPS tracking

@@ -41,7 +41,7 @@ const EMERGENCY_NUMBERS = [
 
 export function HelpFeedback() {
   const navigate = useNavigate();
-  const { theme, language, addHelpRequest } = useApp();
+  const { theme, language } = useApp();
   const tc = useThemeClasses(theme);
 
   const [selectedType, setSelectedType] = useState("");
@@ -77,7 +77,6 @@ export function HelpFeedback() {
 
     setIsLoading(true);
     setTimeout(() => {
-      addHelpRequest({ type: selectedType, comment: comment.trim() });
       setIsLoading(false);
       toast.success(t("help.success", language));
       setSelectedType("");

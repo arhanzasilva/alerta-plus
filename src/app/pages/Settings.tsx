@@ -112,14 +112,11 @@ export function Settings() {
   const [speedAlertSound, setSpeedAlertSound] = useState(true);
   const [speedThreshold, setSpeedThreshold] = useState(10);
   const [showSpeedOnMap, setShowSpeedOnMap] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(!!userProfile?.email);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loggedInEmail, setLoggedInEmail] = useState(userProfile?.email || "");
-  const [loggedInMethod, setLoggedInMethod] = useState<"email" | "google">(userProfile?.loginMethod || "email");
   const [accountView, setAccountView] = useState<"login" | "register">("login");
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
@@ -134,7 +131,7 @@ export function Settings() {
   const [isShareLocation, setIsShareLocation] = useState(true);
 
   // Edit modal state for account fields
-  const [editField, setEditField] = useState<"name" | "email" | "neighborhood" | "password" | null>(null);
+  const [editField, setEditField] = useState<"name" | "email" | "neighborhood" | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editValue2, setEditValue2] = useState(""); // for confirm password
   const [editOldPassword, setEditOldPassword] = useState("");
@@ -730,18 +727,13 @@ export function Settings() {
       setIsLoggingIn(true);
       setTimeout(() => {
         setIsLoggingIn(false);
-        setIsLoggedIn(true);
-        setLoggedInEmail(loginEmail);
-        setLoggedInMethod("email");
-        // Update global profile with login info
         if (userProfile) {
-          updateUserProfile({ email: loginEmail, loginMethod: "email", password: loginPassword });
+          updateUserProfile({ email: loginEmail, loginMethod: "email" });
         } else {
           setUserProfile({
             name: "",
             email: loginEmail,
             neighborhood: "",
-            password: loginPassword,
             transportMode: "pedestrian",
             needs: [],
             timePreference: "both",
@@ -757,7 +749,7 @@ export function Settings() {
           });
           setIsOnboarded(true);
         }
-        toast.success("Login realizado com sucesso!");
+        toast.success(t("login.successEmail", language));
       }, 1500);
     };
 
@@ -765,15 +757,12 @@ export function Settings() {
       setLoginError(""); setRegisterError(""); setIsLoggingIn(true);
       setTimeout(() => {
         setIsLoggingIn(false);
-        setIsLoggedIn(true);
         const gEmail = "usuario@gmail.com";
-        setLoggedInEmail(gEmail);
-        setLoggedInMethod("google");
         if (userProfile) {
           updateUserProfile({ email: gEmail, loginMethod: "google" });
         } else {
           setUserProfile({
-            name: "Usuário Google",
+            name: t("login.googleUserName", language),
             email: gEmail,
             neighborhood: "",
             transportMode: "pedestrian",
@@ -791,7 +780,7 @@ export function Settings() {
           });
           setIsOnboarded(true);
         }
-        toast.success("Login com Google realizado!");
+        toast.success(t("login.successGoogle", language));
       }, 1500);
     };
 
@@ -806,18 +795,14 @@ export function Settings() {
       setIsRegistering(true);
       setTimeout(() => {
         setIsRegistering(false);
-        setIsLoggedIn(true);
-        setLoggedInEmail(registerEmail);
-        setLoggedInMethod("email");
         // Create global profile with registration data
         if (userProfile) {
-          updateUserProfile({ name: registerName.trim(), email: registerEmail, password: registerPassword, loginMethod: "email" });
+          updateUserProfile({ name: registerName.trim(), email: registerEmail, loginMethod: "email" });
         } else {
           setUserProfile({
             name: registerName.trim(),
             email: registerEmail,
             neighborhood: "",
-            password: registerPassword,
             transportMode: "pedestrian",
             needs: [],
             timePreference: "both",
@@ -833,16 +818,16 @@ export function Settings() {
           });
           setIsOnboarded(true);
         }
-        toast.success("Conta criada com sucesso!");
+        toast.success(t("register.success", language));
       }, 1800);
     };
 
     const handleLogout = () => {
-      setIsLoggedIn(false); setLoginEmail(""); setLoginPassword(""); setLoggedInEmail(""); setLoginError(""); setAccountView("login");
+      setLoginEmail(""); setLoginPassword(""); setLoginError(""); setAccountView("login");
       setUserProfile(null);
       setIsOnboarded(false);
       localStorage.removeItem("alertaplus_profile");
-      toast("Você saiu da conta");
+      toast(t("profile.logout", language));
     };
 
     // Handle saving edited field
@@ -857,7 +842,6 @@ export function Settings() {
         if (!editValue.trim()) { setEditError("Digite seu e-mail"); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editValue)) { setEditError("E-mail inválido"); return; }
         updateUserProfile({ email: editValue.trim() });
-        setLoggedInEmail(editValue.trim());
         toast.success("E-mail atualizado!");
         setEditField(null);
       } else if (editField === "neighborhood") {
@@ -865,22 +849,15 @@ export function Settings() {
         updateUserProfile({ neighborhood: editValue.trim() });
         toast.success("Bairro atualizado!");
         setEditField(null);
-      } else if (editField === "password") {
-        if (userProfile?.password && editOldPassword !== userProfile.password) { setEditError("Senha atual incorreta"); return; }
-        if (!editValue.trim() || editValue.length < 6) { setEditError("Nova senha deve ter no mínimo 6 caracteres"); return; }
-        if (editValue !== editValue2) { setEditError("As senhas não coincidem"); return; }
-        updateUserProfile({ password: editValue });
-        toast.success("Senha alterada com sucesso!");
-        setEditField(null);
       }
       setEditValue("");
       setEditValue2("");
       setEditOldPassword("");
     };
 
-    const openEditField = (field: "name" | "email" | "neighborhood" | "password") => {
+    const openEditField = (field: "name" | "email" | "neighborhood") => {
       setEditError("");
-      setEditValue(field === "name" ? (userProfile?.name || "") : field === "email" ? (loggedInEmail || userProfile?.email || "") : field === "neighborhood" ? (userProfile?.neighborhood || "") : "");
+      setEditValue(field === "name" ? (userProfile?.name || "") : field === "email" ? (userProfile?.email || "") : field === "neighborhood" ? (userProfile?.neighborhood || "") : "");
       setEditValue2("");
       setEditOldPassword("");
       setEditField(field);
@@ -910,9 +887,8 @@ export function Settings() {
     // === Edit field modal ===
     const EditFieldModal = () => {
       if (!editField) return null;
-      const fieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro", password: "Alterar senha" };
-      const fieldPlaceholders: Record<string, string> = { name: "Seu nome completo", email: "seu@email.com", neighborhood: "Ex: Cidade Nova, Flores...", password: "Nova senha" };
-      const isPassword = editField === "password";
+      const fieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro" };
+      const fieldPlaceholders: Record<string, string> = { name: "Seu nome completo", email: "seu@email.com", neighborhood: "Ex: Cidade Nova, Flores..." };
 
       return (
         <motion.div
@@ -933,29 +909,18 @@ export function Settings() {
             <div className="w-10 h-1.5 bg-[#d1d5dc] rounded-full mx-auto mb-5" />
             <h3 className={`${textPrimary} text-[18px] font-bold font-['Poppins'] mb-4`}>{fieldLabels[editField]}</h3>
 
-            {isPassword && userProfile?.password && (
-              <div className="mb-3">
-                <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Senha atual</label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-[18px] h-[18px] text-gray-400" /></div>
-                  <input type="password" placeholder="Senha atual" value={editOldPassword} onChange={(e) => { setEditOldPassword(e.target.value); setEditError(""); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
-                </div>
-              </div>
-            )}
-
             <div className="mb-3">
               <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>
-                {isPassword ? "Nova senha" : fieldLabels[editField]}
+                {fieldLabels[editField]}
               </label>
               <div className="relative">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
                   {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
                   {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
                   {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
-                  {isPassword && <IconKey className="w-[18px] h-[18px] text-gray-400" />}
                 </div>
                 <input
-                  type={isPassword ? "password" : editField === "email" ? "email" : "text"}
+                  type={editField === "email" ? "email" : "text"}
                   placeholder={fieldPlaceholders[editField]}
                   value={editValue}
                   onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
@@ -964,16 +929,6 @@ export function Settings() {
                 />
               </div>
             </div>
-
-            {isPassword && (
-              <div className="mb-3">
-                <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Confirmar nova senha</label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className="w-[18px] h-[18px] text-gray-400" /></div>
-                  <input type="password" placeholder="Repita a nova senha" value={editValue2} onChange={(e) => { setEditValue2(e.target.value); setEditError(""); }} onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); }} className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
-                </div>
-              </div>
-            )}
 
             <AnimatePresence>
               {editError && (
@@ -1000,9 +955,9 @@ export function Settings() {
     };
 
     // Derive logged-in state from both local flag and global profile
-    const effectiveLoggedIn = isLoggedIn || !!(userProfile?.email);
-    const effectiveEmail = loggedInEmail || userProfile?.email || "";
-    const effectiveMethod = userProfile?.loginMethod || loggedInMethod || "email";
+    const effectiveLoggedIn = !!(userProfile?.loginMethod) || !!(userProfile?.email);
+    const effectiveEmail = userProfile?.email || "";
+    const effectiveMethod = userProfile?.loginMethod || "email";
 
     // === Logged-in view ===
     if (effectiveLoggedIn) {
@@ -1037,8 +992,7 @@ export function Settings() {
             <div className={`${cardBg}`}>
               {renderSettingRow({ icon: IconUserCircle, label: "Nome", iconBg: "bg-blue-500", subtitle: userProfile?.name || "Toque para definir", action: () => openEditField("name") }, 0, false)}
               {renderSettingRow({ icon: IconAt, label: "E-mail", iconBg: "bg-indigo-500", subtitle: effectiveEmail || "Toque para definir", action: () => openEditField("email") }, 1, false)}
-              {renderSettingRow({ icon: IconMapPin, label: "Bairro", iconBg: "bg-[#00bc7d]", subtitle: userProfile?.neighborhood || "Toque para definir", action: () => openEditField("neighborhood") }, 2, false)}
-              {renderSettingRow({ icon: IconKey, label: "Alterar senha", iconBg: "bg-amber-500", action: () => openEditField("password") }, 3, true)}
+              {renderSettingRow({ icon: IconMapPin, label: "Bairro", iconBg: "bg-[#00bc7d]", subtitle: userProfile?.neighborhood || "Toque para definir", action: () => openEditField("neighborhood") }, 2, true)}
             </div>
             <div className="px-5 pt-5">
               <button type="button" onClick={handleLogout} className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl border font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition ${isDark ? "border-red-500/30 text-red-400 active:bg-red-500/10" : "border-red-200 text-red-500 active:bg-red-50"}`}>

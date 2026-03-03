@@ -124,7 +124,7 @@ export function HelpHistory() {
         className={`relative z-10 flex items-center gap-3 px-4 pb-3 pt-[env(safe-area-inset-top,0px)] min-h-[60px] border-b ${tc.border} ${tc.bgCard}`}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/profile", { replace: true })}
           className={`w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 ${tc.activeRow}`}
         >
           <IconArrowLeft className={`w-5 h-5 ${tc.iconColor}`} />

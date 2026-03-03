@@ -1543,65 +1543,116 @@ export function Routes() {
             )}
 
             {/* Route results */}
-            {!isLoadingRoutes && routes.map((route, idx) => (
-              <motion.div key={idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
-                <div className={`${cardBg} border ${cardBorder} p-4 rounded-2xl`}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3 flex-1">
-                      <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${getRouteIconStyle(route.icon)}`}>
-                        {route.icon === "🛡️" && <IconShieldCheck className="w-5 h-5" />}
-                        {route.icon === "⚖️" && <IconScale className="w-5 h-5" />}
-                        {route.icon === "⚡" && <IconBolt className="w-5 h-5" />}
-                      </span>
-                      <div className="min-w-0">
-                        <div className={`${textPrimary} text-[15px]`}>{route.name}</div>
-                        <div className={`${textSecondary} text-xs`}>{route.description}</div>
+            {!isLoadingRoutes && routes.map((route, idx) => {
+              const routeColor = idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : "#3b82f6";
+              const routeColorMuted = idx === 0 ? "rgba(16,185,129,0.12)" : idx === 1 ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)";
+              const safetyColor = route.safetyScore >= 80 ? "#10b981" : route.safetyScore >= 55 ? "#f59e0b" : "#ef4444";
+              const isRecommended = idx === 0;
+
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.08 }}
+                  className={`rounded-2xl overflow-hidden ${isRecommended ? "ring-2" : `border ${cardBorder}`} ${cardBg}`}
+                  style={isRecommended ? { ringColor: routeColor, boxShadow: `0 0 0 2px ${routeColor}` } : {}}
+                >
+                  {/* Top color stripe */}
+                  <div className="h-1 w-full" style={{ backgroundColor: routeColor }} />
+
+                  <div className="p-4">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between mb-3.5">
+                      <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: routeColorMuted, color: routeColor }}
+                        >
+                          {route.icon === "🛡️" && <IconShieldCheck className="w-6 h-6" />}
+                          {route.icon === "⚖️" && <IconScale className="w-6 h-6" />}
+                          {route.icon === "⚡" && <IconBolt className="w-6 h-6" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`${textPrimary} text-[15px] font-bold font-['Poppins'] leading-tight`}>{route.name}</p>
+                          <p className={`${textSecondary} text-[12px] font-['Poppins'] mt-0.5`}>{route.description}</p>
+                        </div>
+                      </div>
+                      {isRecommended && (
+                        <span
+                          className="flex-shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full font-['Poppins']"
+                          style={{ backgroundColor: routeColorMuted, color: routeColor }}
+                        >
+                          {t("routes.recommended", language)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stats row */}
+                    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mb-3 ${isDark ? "bg-white/[0.04]" : "bg-gray-50"}`}>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <IconRuler size={14} className={textSecondary} />
+                        <span className={`${textPrimary} text-[14px] font-bold font-['Poppins']`}>{route.distance}</span>
+                      </div>
+                      <div className={`w-px h-4 flex-shrink-0 ${isDark ? "bg-gray-600" : "bg-gray-200"}`} />
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <IconClock size={14} className={textSecondary} />
+                        <span className={`${textPrimary} text-[14px] font-bold font-['Poppins']`}>{route.time}</span>
+                      </div>
+                      <div className={`w-px h-4 flex-shrink-0 ${isDark ? "bg-gray-600" : "bg-gray-200"}`} />
+                      {/* Safety progress bar */}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className={`flex-1 h-2 rounded-full ${isDark ? "bg-gray-700" : "bg-gray-200"} overflow-hidden`}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${route.safetyScore}%`, backgroundColor: safetyColor }}
+                          />
+                        </div>
+                        <span className="text-[13px] font-bold font-['Poppins'] flex-shrink-0" style={{ color: safetyColor }}>
+                          {route.safetyScore}%
+                        </span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
-                      {idx === 0 && <div className="bg-green-500/10 text-green-600 text-[11px] px-2.5 py-1 rounded-full">{t("routes.recommended", language)}</div>}
-                      {route.warnings > 0 && (
-                        <div className="flex items-center gap-1 bg-orange-500/10 text-orange-500 text-[11px] px-2.5 py-1 rounded-full">
-                          <IconAlertTriangle className="w-3 h-3" />
-                          {route.warnings} {route.warnings === 1 ? t("routes.alert", language) : t("routes.alerts", language)}
-                        </div>
-                      )}
-                      {route.warnings === 0 && idx !== 0 && (
-                        <div className="flex items-center gap-1 bg-green-500/10 text-green-600 text-[11px] px-2.5 py-1 rounded-full">
-                          <IconCheck className="w-3 h-3" />
-                          {t("routes.safe", language)}
-                        </div>
-                      )}
+
+                    {/* Warnings / safe */}
+                    {route.warnings > 0 ? (
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mb-3.5 ${isDark ? "bg-orange-500/10" : "bg-orange-50"}`}>
+                        <IconAlertTriangle size={14} className="text-orange-500 flex-shrink-0" />
+                        <span className={`text-[12px] font-medium font-['Poppins'] ${isDark ? "text-orange-400" : "text-orange-600"}`}>
+                          {route.warnings} {route.warnings === 1 ? t("routes.alert", language) : t("routes.alerts", language)} {t("routes.onThisRoute", language)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mb-3.5 ${isDark ? "bg-emerald-500/10" : "bg-emerald-50"}`}>
+                        <IconCheck size={14} className="text-emerald-500 flex-shrink-0" />
+                        <span className={`text-[12px] font-medium font-['Poppins'] ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+                          {t("routes.noKnownAlerts", language)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setSelectedRouteIdx(idx); setIsNavigating(true); }}
+                        className="flex-1 py-3 rounded-xl font-bold text-[14px] font-['Poppins'] flex items-center justify-center gap-2 text-white active:scale-95 transition shadow-sm"
+                        style={{ backgroundColor: routeColor }}
+                      >
+                        <IconNavigation size={17} className="text-white" />
+                        {t("routes.startNavigation", language)}
+                      </button>
+                      <button
+                        onClick={() => setSelectedRouteIdx(idx)}
+                        className={`px-4 py-3 rounded-xl font-semibold text-[13px] font-['Poppins'] flex items-center justify-center gap-1 active:scale-95 transition ${isDark ? "bg-white/[0.07] text-gray-300 hover:bg-white/10" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      >
+                        {t("routes.viewDetails", language)}
+                        <IconChevronRight size={15} />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    {[
-                      { val: route.distance, label: t("routes.distance", language), icon: IconRuler },
-                      { val: route.time, label: t("routes.time", language), icon: IconClock },
-                      { val: `${route.safetyScore}%`, label: t("routes.safety", language), icon: IconShield },
-                    ].map((s) => {
-                      const StatIcon = s.icon;
-                      return (
-                        <div key={s.label} className={`${theme === "dark" ? "bg-white/[0.04]" : "bg-gray-50"} rounded-lg p-2 text-center`}>
-                          <StatIcon className={`w-3 h-3 mx-auto mb-0.5 ${textSecondary}`} />
-                          <div className={`text-sm ${textPrimary}`}>{s.val}</div>
-                          <div className={`text-[10px] ${textSecondary}`}>{s.label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <button onClick={() => setSelectedRouteIdx(idx)} className={`w-full py-2.5 rounded-lg active:scale-[0.98] transition text-sm flex items-center justify-center gap-2 ${
-                    idx === 0 ? "bg-green-500 text-white" :
-                    idx === 1 ? "bg-amber-500 text-white" :
-                    "bg-red-500 text-white"
-                  }`}>
-                    {t("routes.viewDetails", language)}
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
 
             <div className={`${theme === "dark" ? "bg-white/[0.03]" : "bg-gray-50"} border ${cardBorder} p-4 rounded-xl`}>
               <div className="flex items-start gap-3">

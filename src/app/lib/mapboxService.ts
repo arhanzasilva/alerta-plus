@@ -186,7 +186,7 @@ class MapboxService {
       }));
     } catch (error) {
       console.error('Erro ao buscar endereços:', error);
-      throw error;
+      return [];
     }
   }
 

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { IconCamera, IconMapPin, IconSend, IconArrowLeft, IconBolt, IconShield, IconFlame, IconWallet, IconSword, IconCloudRain, IconBarrierBlock, IconAccessible, IconBulb } from "@tabler/icons-react";
+import { t } from "../context/translations";
+import { IconCamera, IconMapPin, IconSend, IconArrowLeft, IconShield, IconFlame, IconWallet, IconSword, IconCloudRain, IconBarrierBlock, IconAccessible, IconBulb } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 
 export function ReportIncident() {
   const navigate = useNavigate();
-  const { addIncident, userProfile, theme } = useApp();
+  const { addIncident, userProfile, theme, language, userLocation } = useApp();
   const [step, setStep] = useState(1);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedSeverity, setSelectedSeverity] = useState<"low" | "medium" | "high" | "critical">("medium");
@@ -15,67 +16,71 @@ export function ReportIncident() {
 
   const incidentTypes = [
     {
-      category: "Segurança",
+      category: t("report.security", language),
       icon: IconShield,
       color: "from-red-500 to-red-600",
       items: [
-        { value: "crime", Icon: IconFlame, label: "Crime", desc: "Atividade criminosa" },
-        { value: "danger-zone", Icon: IconShield, label: "Zona Perigosa", desc: "Área de risco" },
-        { value: "theft", Icon: IconWallet, label: "Roubo/Furto", desc: "Roubo ou furto" },
-        { value: "assault", Icon: IconSword, label: "Assalto", desc: "Assalto a pessoas" },
+        { value: "crime", Icon: IconFlame, label: t("report.crime", language), desc: t("report.crimeDesc", language) },
+        { value: "danger-zone", Icon: IconShield, label: t("report.dangerZone", language), desc: t("report.dangerZoneDesc", language) },
+        { value: "theft", Icon: IconWallet, label: t("report.theft", language), desc: t("report.theftDesc", language) },
+        { value: "assault", Icon: IconSword, label: t("report.assault", language), desc: t("report.assaultDesc", language) },
       ],
     },
     {
-      category: "Infraestrutura",
+      category: t("report.infrastructure", language),
       icon: IconBarrierBlock,
       color: "from-blue-500 to-blue-600",
       items: [
-        { value: "flood", Icon: IconCloudRain, label: "Alagamento", desc: "Água acumulada" },
-        { value: "obstacle", Icon: IconBarrierBlock, label: "Obstáculo", desc: "Obstrução na via" },
-        { value: "accessibility", Icon: IconAccessible, label: "Acessibilidade", desc: "Problema de acesso" },
-        { value: "construction", Icon: IconBarrierBlock, label: "Obra", desc: "Obra ou bloqueio" },
-        { value: "no-light", Icon: IconBulb, label: "Sem Luz", desc: "Iluminação ruim" },
+        { value: "flood", Icon: IconCloudRain, label: t("report.flood", language), desc: t("report.floodDesc", language) },
+        { value: "obstacle", Icon: IconBarrierBlock, label: t("report.obstacle", language), desc: t("report.obstacleDesc", language) },
+        { value: "accessibility", Icon: IconAccessible, label: t("report.accessibility", language), desc: t("report.accessibilityDesc", language) },
+        { value: "construction", Icon: IconBarrierBlock, label: t("report.construction", language), desc: t("report.constructionDesc", language) },
+        { value: "no-light", Icon: IconBulb, label: t("report.noLight", language), desc: t("report.noLightDesc", language) },
       ],
     },
   ];
 
   const severityLevels = [
-    { value: "low", label: "Baixo", color: "from-green-500 to-green-600", icon: "●" },
-    { value: "medium", label: "Médio", color: "from-yellow-500 to-yellow-600", icon: "●●" },
-    { value: "high", label: "Alto", color: "from-orange-500 to-orange-600", icon: "●●●" },
-    { value: "critical", label: "Crítico", color: "from-red-500 to-red-600", icon: "●●●●" },
+    { value: "low", label: t("severity.low", language), color: "from-green-500 to-green-600", icon: "●", desc: t("report.lowDesc", language) },
+    { value: "medium", label: t("severity.medium", language), color: "from-yellow-500 to-yellow-600", icon: "●●", desc: t("report.mediumDesc", language) },
+    { value: "high", label: t("severity.high", language), color: "from-orange-500 to-orange-600", icon: "●●●", desc: t("report.highDesc", language) },
+    { value: "critical", label: t("severity.critical", language), color: "from-red-500 to-red-600", icon: "●●●●", desc: t("report.criticalDesc", language) },
   ];
 
   const handleSubmit = () => {
     if (!selectedType) return;
 
+    const pointsMap: Record<string, number> = { low: 5, medium: 10, high: 15, critical: 20 };
+    const points = pointsMap[selectedSeverity] ?? 10;
+
     addIncident({
-      type: selectedType as any,
+      type: selectedType as "flood" | "obstacle" | "accessibility" | "construction" | "no-light" | "crime" | "danger-zone" | "theft" | "assault",
       severity: selectedSeverity,
       location: {
-        lat: -3.1190275,
-        lng: -60.0217314,
-        address: "Av. Eduardo Ribeiro, Centro - Manaus",
+        lat: userLocation?.lat ?? -3.1190275,
+        lng: userLocation?.lng ?? -60.0217314,
+        address: t("mapview.nearYourLocation", language),
       },
       description: description || undefined,
       reportedBy: userProfile?.name,
     });
 
-    const pointsMap = { low: 5, medium: 10, high: 15, critical: 20 };
-    toast.success("Ocorrência reportada!", {
-      description: `+${pointsMap[selectedSeverity]} pontos • Obrigado por ajudar!`,
+    toast.success(t("report.reported", language), {
+      description: `+${points} ${t("report.thanksPoints", language)}`,
     });
 
     navigate("/map");
   };
 
-  const bgClass = theme === "dark" 
-    ? "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" 
+  const isDark = theme === "dark";
+  const bgClass = isDark
+    ? "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
     : "bg-gradient-to-br from-blue-50 via-white to-purple-50";
-  const textPrimary = theme === "dark" ? "text-white" : "text-gray-900";
-  const textSecondary = theme === "dark" ? "text-white/70" : "text-gray-600";
-  const cardBg = theme === "dark" ? "bg-white/10" : "bg-white";
-  const cardBorder = theme === "dark" ? "border-white/20" : "border-gray-200";
+  const textPrimary = isDark ? "text-white" : "text-gray-900";
+  const textSecondary = isDark ? "text-white/70" : "text-gray-600";
+  const cardBg = isDark ? "bg-white/10" : "bg-white";
+  const cardBorder = isDark ? "border-white/20" : "border-gray-200";
+  const hoverCardBg = isDark ? "hover:bg-white/20" : "hover:bg-gray-50";
 
   if (step === 1) {
     return (
@@ -91,8 +96,8 @@ export function ReportIncident() {
             <IconArrowLeft className="w-7 h-7" />
           </button>
           <div>
-            <h1 className={`text-2xl ${textPrimary} font-bold`}>Reportar</h1>
-            <p className={`text-sm ${textSecondary}`}>Passo 1 de 3 • Tipo</p>
+            <h1 className={`text-2xl ${textPrimary} font-bold`}>{t("report.title", language)}</h1>
+            <p className={`text-sm ${textSecondary}`}>{t("report.step1", language)}</p>
           </div>
         </div>
 
@@ -125,7 +130,7 @@ export function ReportIncident() {
                             setSelectedType(type.value);
                             setStep(2);
                           }}
-                          className={`w-full p-5 rounded-2xl ${cardBg} backdrop-blur-sm border ${cardBorder} text-left hover:${theme === "dark" ? "bg-white/20" : "bg-gray-50"} active:scale-98 transition`}
+                          className={`w-full p-5 rounded-2xl ${cardBg} backdrop-blur-sm border ${cardBorder} text-left ${hoverCardBg} active:scale-[0.98] transition`}
                         >
                           <div className="flex items-center gap-4">
                             <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-xl flex items-center justify-center`}>
@@ -168,8 +173,8 @@ export function ReportIncident() {
             <IconArrowLeft className="w-7 h-7" />
           </button>
           <div>
-            <h1 className={`text-2xl ${textPrimary} font-bold`}>Nível de Risco</h1>
-            <p className={`text-sm ${textSecondary}`}>Passo 2 de 3 • Gravidade</p>
+            <h1 className={`text-2xl ${textPrimary} font-bold`}>{t("report.riskLevel", language)}</h1>
+            <p className={`text-sm ${textSecondary}`}>{t("report.step2", language)}</p>
           </div>
         </div>
 
@@ -188,16 +193,16 @@ export function ReportIncident() {
             </div>
           </div>
 
-          <h3 className={`text-lg font-bold ${textPrimary} mb-4`}>Qual o nível de gravidade?</h3>
+          <h3 className={`text-lg font-bold ${textPrimary} mb-4`}>{t("report.severityQuestion", language)}</h3>
 
           <div className="space-y-3">
             {severityLevels.map((level) => (
               <button
                 key={level.value}
-                onClick={() => setSelectedSeverity(level.value as any)}
-                className={`w-full p-5 rounded-2xl text-left transition active:scale-98 border-2 ${
+                onClick={() => setSelectedSeverity(level.value as "low" | "medium" | "high" | "critical")}
+                className={`w-full p-5 rounded-2xl text-left transition active:scale-[0.98] border-2 ${
                   selectedSeverity === level.value
-                    ? theme === "dark"
+                    ? isDark
                       ? "bg-white/20 border-white/40 backdrop-blur-sm"
                       : "bg-gray-100 border-gray-400"
                     : `${cardBg} ${cardBorder}`
@@ -209,12 +214,7 @@ export function ReportIncident() {
                   </div>
                   <div className="flex-1">
                     <div className={`text-xl font-bold ${textPrimary} mb-1`}>{level.label}</div>
-                    <div className={`text-sm ${textSecondary}`}>
-                      {level.value === "low" && "Situação controlada"}
-                      {level.value === "medium" && "Requer atenção"}
-                      {level.value === "high" && "Situação perigosa"}
-                      {level.value === "critical" && "Perigo imediato"}
-                    </div>
+                    <div className={`text-sm ${textSecondary}`}>{level.desc}</div>
                   </div>
                   {selectedSeverity === level.value && (
                     <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -227,12 +227,12 @@ export function ReportIncident() {
           </div>
         </div>
 
-        <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${theme === "dark" ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent`}>
+        <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${isDark ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent`}>
           <button
             onClick={() => setStep(3)}
             className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-orange-700 active:scale-95 transition shadow-2xl"
           >
-            Continuar
+            {t("report.continue", language)}
           </button>
         </div>
       </div>
@@ -244,6 +244,7 @@ export function ReportIncident() {
     .find((t) => t.value === selectedType);
   const SelectedIcon = selectedTypeData?.Icon;
   const selectedSeverityData = severityLevels.find((s) => s.value === selectedSeverity);
+  const pointsMap: Record<string, number> = { low: 5, medium: 10, high: 15, critical: 20 };
 
   return (
     <div className={`h-full w-full ${bgClass} flex flex-col overflow-hidden`}>
@@ -257,8 +258,8 @@ export function ReportIncident() {
           <IconArrowLeft className="w-7 h-7" />
         </button>
         <div>
-          <h1 className={`text-2xl ${textPrimary} font-bold`}>Detalhes</h1>
-          <p className={`text-sm ${textSecondary}`}>Passo 3 de 3 • Finalizar</p>
+          <h1 className={`text-2xl ${textPrimary} font-bold`}>{t("report.details", language)}</h1>
+          <p className={`text-sm ${textSecondary}`}>{t("report.step3", language)}</p>
         </div>
       </div>
 
@@ -273,43 +274,43 @@ export function ReportIncident() {
             <div className="flex-1">
               <div className={`text-xl font-bold ${textPrimary}`}>{selectedTypeData?.label}</div>
               <div className={`inline-flex px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${selectedSeverityData?.color} text-white mt-2`}>
-                {selectedSeverityData?.label} Risco
+                {selectedSeverityData?.label} {t("report.riskSuffix", language)}
               </div>
             </div>
           </div>
 
           <div className={`flex items-center gap-3 ${textSecondary}`}>
             <IconMapPin className="w-5 h-5 flex-shrink-0" />
-            <span className="text-sm">Av. Eduardo Ribeiro, Centro - Manaus</span>
+            <span className="text-sm">{t("mapview.nearYourLocation", language)}</span>
           </div>
         </div>
 
         <div className="mb-6">
-          <label className={`block ${textPrimary} font-bold mb-3`}>Descrição (opcional)</label>
+          <label className={`block ${textPrimary} font-bold mb-3`}>{t("mapview.descriptionOptional", language)}</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ex: Vi pessoas suspeitas na esquina..."
-            className={`w-full p-4 ${cardBg} backdrop-blur-sm border-2 ${cardBorder} rounded-2xl ${textPrimary} placeholder:${textSecondary} resize-none h-32 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+            placeholder={t("report.descriptionPlaceholder", language)}
+            className={`w-full p-4 ${cardBg} backdrop-blur-sm border-2 ${cardBorder} rounded-2xl ${textPrimary} ${isDark ? "placeholder:text-white/40" : "placeholder:text-gray-400"} resize-none h-32 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
           />
         </div>
 
-        <button className={`w-full py-4 border-2 border-dashed ${cardBorder} rounded-2xl ${textSecondary} hover:${textPrimary} hover:${theme === "dark" ? "border-white/50" : "border-gray-400"} active:scale-98 transition flex items-center justify-center gap-3 ${cardBg}`}>
+        <button className={`w-full py-4 border-2 border-dashed ${cardBorder} rounded-2xl ${textSecondary} ${isDark ? "hover:text-white hover:border-white/50" : "hover:text-gray-900 hover:border-gray-400"} active:scale-[0.98] transition flex items-center justify-center gap-3 ${cardBg}`}>
           <IconCamera className="w-6 h-6" />
-          <span className="font-medium">Adicionar foto (opcional)</span>
+          <span className="font-medium">{t("report.addPhotoOptional", language)}</span>
         </button>
       </div>
 
-      <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${theme === "dark" ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent space-y-3`}>
+      <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${isDark ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent space-y-3`}>
         <button
           onClick={handleSubmit}
           className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-95 transition shadow-2xl flex items-center justify-center gap-3"
         >
           <IconSend className="w-6 h-6" />
-          Enviar Alerta
+          {t("mapview.sendAlert", language)}
         </button>
         <p className={`text-sm ${textSecondary} text-center`}>
-          ⚡ Você ganhará {severityLevels.find((s) => s.value === selectedSeverity)?.value === "critical" ? "20" : severityLevels.find((s) => s.value === selectedSeverity)?.value === "high" ? "15" : severityLevels.find((s) => s.value === selectedSeverity)?.value === "medium" ? "10" : "5"} pontos
+          ⚡ {t("mapview.youWillEarn", language)} {pointsMap[selectedSeverity] ?? 10} {t("mapview.points", language)}
         </p>
       </div>
     </div>

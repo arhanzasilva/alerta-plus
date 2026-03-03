@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, ComponentType } from "react";
+import { generateSeedIncidents, SEED_VERSION, SEED_VERSION_KEY } from "../data/seedIncidents";
 import {
   IconFlagFilled,
   IconDropletFilled,
@@ -64,14 +65,6 @@ export interface FavoriteRoute {
   risk: string;
   warnings: number;
   savedAt: number;
-}
-
-export interface HelpRequest {
-  id: string;
-  type: string;
-  comment: string;
-  timestamp: number;
-  status: "pending" | "inProgress" | "resolved";
 }
 
 export interface Achievement {
@@ -322,9 +315,12 @@ interface AppContextType {
   incrementRoutesSearched: () => void;
   notificationSettings: NotificationSettings;
   updateNotificationSettings: (updates: Partial<NotificationSettings>) => void;
-  helpRequests: HelpRequest[];
-  addHelpRequest: (request: Omit<HelpRequest, "id" | "timestamp" | "status">) => void;
-  updateHelpRequestStatus: (id: string, status: HelpRequest["status"]) => void;
+  dismissedNotifIds: Set<string>;
+  readNotifIds: Set<string>;
+  dismissNotif: (id: string) => void;
+  dismissNotifs: (ids: string[]) => void;
+  markNotifRead: (id: string) => void;
+  markAllNotifsRead: (ids: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -350,7 +346,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>({ lat: -3.1190, lng: -60.0217 });
   const [language, setLanguageState] = useState<Language>("pt");
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>("km");
-  const [helpRequests, setHelpRequests] = useState<HelpRequest[]>([]);
+
+
+  const [dismissedNotifIds, setDismissedNotifIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("alertaplus_dismissed_notifs");
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
+  const [readNotifIds, setReadNotifIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("alertaplus_read_notifs");
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
 
   const prevUnlockedRef = useRef<Map<string, number>>(new Map());
   const hasLoadedRef = useRef(false);
@@ -412,7 +421,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const savedFavorites = localStorage.getItem("alertaplus_favorites");
     const savedAchievements = localStorage.getItem("alertaplus_achievements");
     const savedNotifications = localStorage.getItem("alertaplus_notifications");
-    const savedHelpRequests = localStorage.getItem("alertaplus_help_requests");
 
     try { if (savedProfile) {
       const parsed = JSON.parse(savedProfile);
@@ -446,107 +454,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { if (savedNotifications) {
       setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedNotifications) });
     } } catch { /* ignore */ }
-    try { if (savedHelpRequests) {
-      setHelpRequests(JSON.parse(savedHelpRequests));
-    } } catch { /* ignore */ }
 
-    hasLoadedRef.current = true;
+    // ── Carrega incidentes + mescla dados oficiais (SSP-AM / Defesa Civil) ──
+    try {
+      const seeds = generateSeedIncidents();
+      const savedSeedVersion = localStorage.getItem(SEED_VERSION_KEY);
 
-    try { if (savedIncidents) {
-      setIncidents(JSON.parse(savedIncidents));
-    } else {
-      const sampleIncidents: Incident[] = [
-        {
-          id: "1",
-          type: "crime",
-          severity: "high",
-          location: { lat: -3.119, lng: -60.021, address: "Av. Sete de Setembro, Centro" },
-          timestamp: Date.now() - 1800000,
-          confirmations: 8,
-          denials: 1,
-          status: "active",
-          description: "Relatos de atividade suspeita na regiao",
-        },
-        {
-          id: "2",
-          type: "danger-zone",
-          severity: "critical",
-          location: { lat: -3.120, lng: -60.022, address: "Praca da Policia, Centro" },
-          timestamp: Date.now() - 3600000,
-          confirmations: 15,
-          denials: 2,
-          status: "active",
-          description: "Area com alto indice de ocorrencias",
-        },
-        {
-          id: "3",
-          type: "theft",
-          severity: "medium",
-          location: { lat: -3.118, lng: -60.023, address: "Rua 24 de Maio, Centro" },
-          timestamp: Date.now() - 900000,
-          confirmations: 5,
-          denials: 0,
-          status: "active",
-          description: "Furtos reportados nas ultimas horas",
-        },
-        {
-          id: "4",
-          type: "flood",
-          severity: "high",
-          location: { lat: -3.121, lng: -60.020, address: "Av. Eduardo Ribeiro, Centro" },
-          timestamp: Date.now() - 1200000,
-          confirmations: 12,
-          denials: 1,
-          status: "active",
-          description: "Alagamento apos chuva forte",
-        },
-        {
-          id: "5",
-          type: "no-light",
-          severity: "medium",
-          location: { lat: -3.117, lng: -60.024, address: "Rua Monsenhor Coutinho" },
-          timestamp: Date.now() - 7200000,
-          confirmations: 6,
-          denials: 0,
-          status: "active",
-          description: "Postes de luz queimados",
-        },
-        {
-          id: "6",
-          type: "assault",
-          severity: "critical",
-          location: { lat: -3.122, lng: -60.019, address: "Beco do Comercio" },
-          timestamp: Date.now() - 2700000,
-          confirmations: 10,
-          denials: 0,
-          status: "active",
-          description: "Assaltos frequentes neste horario",
-        },
-        {
-          id: "7",
-          type: "construction",
-          severity: "low",
-          location: { lat: -3.116, lng: -60.025, address: "Av. Getulio Vargas" },
-          timestamp: Date.now() - 86400000,
-          confirmations: 20,
-          denials: 1,
-          status: "active",
-          description: "Obra de drenagem em andamento",
-        },
-        {
-          id: "8",
-          type: "accessibility",
-          severity: "medium",
-          location: { lat: -3.123, lng: -60.018, address: "Rua Henrique Martins" },
-          timestamp: Date.now() - 5400000,
-          confirmations: 7,
-          denials: 2,
-          status: "active",
-          description: "Calcada danificada, dificil passagem",
-        },
-      ];
-      setIncidents(sampleIncidents);
-    } } catch { /* ignore */ }
+      if (savedIncidents) {
+        const parsed: Incident[] = JSON.parse(savedIncidents);
+
+        if (savedSeedVersion !== SEED_VERSION) {
+          // Nova versão dos dados oficiais: adiciona seeds que ainda não existem
+          const existingIds = new Set(parsed.map((i) => i.id));
+          const newSeeds = seeds.filter((s) => !existingIds.has(s.id));
+          setIncidents([...parsed, ...newSeeds]);
+          localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
+        } else {
+          setIncidents(parsed);
+        }
+      } else {
+        // Primeira abertura: carrega os dados oficiais
+        setIncidents(seeds);
+        localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
+      }
+    } catch {
+      setIncidents(generateSeedIncidents());
+    }
+
+    // Delay flag so save effects don't fire with initial (empty) state
+    // on the same render cycle as the load effect
+    queueMicrotask(() => { hasLoadedRef.current = true; });
   }, []);
 
   // Save to localStorage (guard against writing before load completes)
@@ -596,8 +533,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [notificationSettings]);
 
   useEffect(() => {
-    localStorage.setItem("alertaplus_help_requests", JSON.stringify(helpRequests));
-  }, [helpRequests]);
+    localStorage.setItem("alertaplus_dismissed_notifs", JSON.stringify([...dismissedNotifIds]));
+  }, [dismissedNotifIds]);
+
+  useEffect(() => {
+    localStorage.setItem("alertaplus_read_notifs", JSON.stringify([...readNotifIds]));
+  }, [readNotifIds]);
+
+  const dismissNotif = useCallback((id: string) => {
+    setDismissedNotifIds((prev) => new Set([...prev, id]));
+    setReadNotifIds((prev) => new Set([...prev, id]));
+  }, []);
+
+  const dismissNotifs = useCallback((ids: string[]) => {
+    setDismissedNotifIds((prev) => new Set([...prev, ...ids]));
+    setReadNotifIds((prev) => new Set([...prev, ...ids]));
+  }, []);
+
+  const markNotifRead = useCallback((id: string) => {
+    setReadNotifIds((prev) => new Set([...prev, id]));
+  }, []);
+
+  const markAllNotifsRead = useCallback((ids: string[]) => {
+    setReadNotifIds((prev) => new Set([...prev, ...ids]));
+  }, []);
 
   // ============= ACHIEVEMENTS ENGINE =============
   const checkAchievements = useCallback(
@@ -726,6 +685,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Auto-expiração de alertas de usuários (não seed)
+  // Expira se: > 4h OU (contestações >= 3 E contestações > confirmações)
+  useEffect(() => {
+    const EXPIRE_AFTER_MS = 4 * 60 * 60 * 1000; // 4 horas
+    const MIN_DENIALS = 3;
+
+    const check = () => {
+      const now = Date.now();
+      setIncidents((prev) =>
+        prev.map((inc) => {
+          if (inc.status !== "active" || inc.id.startsWith("seed-")) return inc;
+          const tooOld = now - inc.timestamp > EXPIRE_AFTER_MS;
+          const contested = inc.denials >= MIN_DENIALS && inc.denials > inc.confirmations;
+          if (tooOld || contested) return { ...inc, status: "expired" };
+          return inc;
+        })
+      );
+    };
+
+    check();
+    const interval = setInterval(check, 5 * 60 * 1000); // verifica a cada 5 min
+    return () => clearInterval(interval);
+  }, []);
+
   const toggleMapLayer = useCallback((layer: keyof typeof mapLayers) => {
     setMapLayers((prev) => ({ ...prev, [layer]: !prev[layer] }));
   }, []);
@@ -756,24 +739,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateNotificationSettingsFn = useCallback((updates: Partial<NotificationSettings>) => {
     setNotificationSettings((prev) => ({ ...prev, ...updates }));
-  }, []);
-
-  const addHelpRequest = useCallback((request: Omit<HelpRequest, "id" | "timestamp" | "status">) => {
-    const newRequest: HelpRequest = {
-      ...request,
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      status: "pending",
-    };
-    setHelpRequests((prev) => [newRequest, ...prev]);
-  }, []);
-
-  const updateHelpRequestStatus = useCallback((id: string, status: HelpRequest["status"]) => {
-    setHelpRequests((prev) =>
-      prev.map((req) =>
-        req.id === id ? { ...req, status } : req
-      )
-    );
   }, []);
 
   // Build unlocked achievements list (Map preserves unlockedAt timestamp)
@@ -821,9 +786,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         incrementRoutesSearched,
         notificationSettings,
         updateNotificationSettings: updateNotificationSettingsFn,
-        helpRequests,
-        addHelpRequest,
-        updateHelpRequestStatus,
+        dismissedNotifIds,
+        readNotifIds,
+        dismissNotif,
+        dismissNotifs,
+        markNotifRead,
+        markAllNotifsRead,
       }}
     >
       {children}

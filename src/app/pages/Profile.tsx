@@ -20,7 +20,7 @@ import {
   IconUser,
   IconRefresh,
   IconLoader2,
-  IconClipboardList,
+
 } from "@tabler/icons-react";
 
 const getTrustLevelLabel = (level: number) => {
@@ -42,7 +42,6 @@ export function Profile() {
     unlockedAchievements,
     language,
     authStatus,
-    helpRequests,
   } = useApp();
   const navigate = useNavigate();
   const [showLoginOptions, setShowLoginOptions] = useState(false);
@@ -78,13 +77,6 @@ export function Profile() {
       iconBg: "bg-violet-500",
       badge: 0,
       action: () => navigate("/help"),
-    },
-    {
-      icon: IconClipboardList,
-      label: t("profile.helpHistory", language),
-      iconBg: "bg-emerald-500",
-      badge: helpRequests.filter((r) => r.status === "pending").length,
-      action: () => navigate("/help-history"),
     },
   ];
 
@@ -203,11 +195,7 @@ export function Profile() {
                       }
                       setIsLoggingIn(false);
                       setShowLoginOptions(false);
-                      toast.success(
-                        language === "pt" ? "Login com Google realizado!" :
-                        language === "es" ? "¡Inicio con Google exitoso!" :
-                        "Google login successful!"
-                      );
+                      toast.success(t("login.successGoogle", language));
                     }, 1500);
                   }}
                   className="w-full bg-white text-slate-900 py-3 rounded-xl font-bold text-[14px] hover:bg-gray-100 active:scale-[0.97] transition flex items-center justify-center gap-2.5 disabled:opacity-60"
@@ -360,15 +348,17 @@ export function Profile() {
                     className={`rounded-2xl text-center transition relative overflow-hidden ${
                       achievement.unlocked
                         ? `border-2 ${isDark ? "border-gray-600" : "border-gray-200"}`
-                        : `border-2 ${isDark ? "border-gray-700" : "border-gray-200"} opacity-60`
+                        : achievement.progress.current > 0
+                          ? `border-2 ${isDark ? "border-gray-600" : "border-gray-200"}`
+                          : `border-2 ${isDark ? "border-gray-700" : "border-gray-200"} opacity-50`
                     }`}
                   >
-                    {achievement.unlocked && (
-                      <div className={`absolute inset-0 bg-gradient-to-br ${achievement.gradient} opacity-10`} />
+                    {(achievement.unlocked || achievement.progress.current > 0) && (
+                      <div className={`absolute inset-0 bg-gradient-to-br ${achievement.gradient} ${achievement.unlocked ? "opacity-10" : "opacity-5"}`} />
                     )}
                     <div className={`relative z-10 rounded-2xl p-4 ${isDark ? "bg-[#1f2937]" : "bg-white"}`}>
                       <div className="flex items-center justify-center mb-2">
-                        <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${achievement.gradient} flex items-center justify-center shadow-md ${!achievement.unlocked ? "grayscale" : ""}`}>
+                        <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${achievement.gradient} flex items-center justify-center shadow-md ${!achievement.unlocked && achievement.progress.current === 0 ? "grayscale" : ""}`}>
                           {(() => { const AchIcon = achievement.icon; return <AchIcon size={24} className="text-white" />; })()}
                         </div>
                       </div>
@@ -626,7 +616,6 @@ export function Profile() {
             onClick={() => {
               setUserProfile(null);
               setIsOnboarded(false);
-              localStorage.clear();
               navigate("/onboarding");
             }}
             className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition border mt-3 ${isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}
