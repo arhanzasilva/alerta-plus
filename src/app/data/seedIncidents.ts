@@ -17,7 +17,7 @@ import type { Incident } from "../context/AppContext";
  * Versão dos dados. Incremente ao atualizar incidentes seed
  * para que novas entradas sejam mescladas nas instalações existentes.
  */
-export const SEED_VERSION = "v4-2024";
+export const SEED_VERSION = "v5-2024";
 export const SEED_VERSION_KEY = "alertaplus_seed_version";
 
 /** Helper: timestamp N horas atrás */
@@ -30,7 +30,7 @@ function ago(hours: number): number {
  * Chamado uma vez na inicialização do AppContext.
  */
 export function generateSeedIncidents(): Incident[] {
-  return [
+  const raw = [
 
     // ════════════════════════════════════════════════════════════
     //  SEGURANÇA — SSP-AM / SESP-AM
@@ -214,7 +214,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-sec-014",
       type: "crime",
       severity: "high",
-      location: { lat: -3.1298, lng: -59.9952, address: "Mauazinho, Zona Sul" },
+      location: { lat: -3.1175, lng: -59.9952, address: "Mauazinho, Zona Sul" },
       timestamp: ago(38),
       reportedBy: "SSP-AM • Sistema",
       confirmations: 24,
@@ -228,7 +228,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-sec-015",
       type: "crime",
       severity: "high",
-      location: { lat: -3.1375, lng: -60.0282, address: "Colônia Oliveira Machado, Zona Sul" },
+      location: { lat: -3.1270, lng: -60.0282, address: "Colônia Oliveira Machado, Zona Sul" },
       timestamp: ago(28),
       reportedBy: "SSP-AM • Sistema",
       confirmations: 27,
@@ -370,7 +370,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-flood-002",
       type: "flood",
       severity: "critical",
-      location: { lat: -3.1388, lng: -60.0288, address: "Colônia Oliveira Machado — Beira do Igarapé" },
+      location: { lat: -3.1280, lng: -60.0288, address: "Colônia Oliveira Machado — Área de Risco de Inundação" },
       timestamp: ago(2),
       reportedBy: "Defesa Civil • Sistema",
       confirmations: 63,
@@ -394,7 +394,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-flood-004",
       type: "flood",
       severity: "high",
-      location: { lat: -3.1308, lng: -59.9958, address: "Mauazinho — Orla do Rio Negro" },
+      location: { lat: -3.1195, lng: -59.9958, address: "Mauazinho — Área de Risco de Inundação" },
       timestamp: ago(48),
       reportedBy: "Defesa Civil • Sistema",
       confirmations: 22,
@@ -547,4 +547,6 @@ export function generateSeedIncidents(): Incident[] {
       description: "Obra de revitalização da calçada e asfalto. Interdição parcial. Use faixa da esquerda.",
     },
   ];
+
+  return raw.map((inc) => ({ ...inc, official: true as const }));
 }

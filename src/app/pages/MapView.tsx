@@ -288,6 +288,9 @@ export function MapView() {
 
     mapRef.current = map;
 
+    // Garante que os markers sejam renderizados após o estilo inicial carregar
+    map.once('style.load', () => setStyleVersion((v) => v + 1));
+
     // Click handler for reverse geocoding / navigate-to-point
     map.on('click', (e) => {
       const target = e.originalEvent?.target as HTMLElement;
@@ -371,7 +374,7 @@ export function MapView() {
   // Render incident overlays (zones + markers)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
     // Clear existing incident markers
     incidentMarkersRef.current.forEach(({ marker }) => {
@@ -379,61 +382,11 @@ export function MapView() {
     });
     incidentMarkersRef.current.clear();
 
-    // Add GeoJSON source for risk zones (circles)
-    const features = visibleIncidents.map((inc) => {
-      const radius = RISK_RADII[inc.severity] || 120;
-      const color = INCIDENT_COLORS[inc.type] || "#6B7280";
-
-      return {
-        type: "Feature" as const,
-        properties: {
-          color,
-          radius,
-          incidentId: inc.id,
-          isNear: proximityAlert?.incident.id === inc.id,
-        },
-        geometry: {
-          type: "Point" as const,
-          coordinates: [inc.location.lng, inc.location.lat],
-        },
-      };
-    });
-
-    // Remove existing source/layer
-    if (map.getLayer("risk-zones")) map.removeLayer("risk-zones");
-    if (map.getSource("risk-zones")) map.removeSource("risk-zones");
-
-    // Add risk zones as circles
-    map.addSource("risk-zones", {
-      type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features,
-      },
-    });
-
-    map.addLayer({
-      id: "risk-zones",
-      type: "circle",
-      source: "risk-zones",
-      paint: {
-        "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, 0, 20, ["get", "radius"]],
-        "circle-color": ["get", "color"],
-        "circle-opacity": 0.28,
-        "circle-stroke-width": 3,
-        "circle-stroke-color": ["get", "color"],
-        "circle-stroke-opacity": 0.9,
-      },
-    });
-
-    // Add incident markers
+    // Add incident markers (mapboxgl.Marker não depende do estilo estar carregado)
     visibleIncidents.forEach((inc) => {
       const color = INCIDENT_COLORS[inc.type] || "#6B7280";
+      const isOfficial = inc.official === true;
 
-      // Incidentes oficiais (SSP-AM / Defesa Civil / MANAUSTRANS) têm marcador quadrado
-      const isOfficial = inc.reportedBy?.includes("Sistema");
-
-      // Create marker element
       const el = document.createElement("div");
       el.className = "incident-marker";
       el.style.cssText = `
@@ -447,7 +400,6 @@ export function MapView() {
         transform: ${isOfficial ? "rotate(45deg)" : "none"};
       `;
 
-      // Click opens React detail sheet
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         setSelectedIncidentId(inc.id);
@@ -459,6 +411,53 @@ export function MapView() {
 
       incidentMarkersRef.current.set(inc.id, { marker });
     });
+
+    // Circles GeoJSON requerem o estilo carregado — tenta agora, senão aguarda style.load
+    const renderCircles = () => {
+      if (!map.isStyleLoaded()) return;
+
+      const features = visibleIncidents.map((inc) => ({
+        type: "Feature" as const,
+        properties: {
+          color: INCIDENT_COLORS[inc.type] || "#6B7280",
+          radius: RISK_RADII[inc.severity] || 120,
+          incidentId: inc.id,
+          isNear: proximityAlert?.incident.id === inc.id,
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [inc.location.lng, inc.location.lat],
+        },
+      }));
+
+      if (map.getLayer("risk-zones")) map.removeLayer("risk-zones");
+      if (map.getSource("risk-zones")) map.removeSource("risk-zones");
+
+      map.addSource("risk-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features },
+      });
+
+      map.addLayer({
+        id: "risk-zones",
+        type: "circle",
+        source: "risk-zones",
+        paint: {
+          "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, 0, 20, ["get", "radius"]],
+          "circle-color": ["get", "color"],
+          "circle-opacity": 0.28,
+          "circle-stroke-width": 3,
+          "circle-stroke-color": ["get", "color"],
+          "circle-stroke-opacity": 0.9,
+        },
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      renderCircles();
+    } else {
+      map.once("style.load", renderCircles);
+    }
   }, [visibleIncidents, proximityAlert, isDark, styleVersion, language]);
 
   // ═══ Proximity detection ═══
@@ -1322,7 +1321,7 @@ export function MapView() {
           const inc = selectedIncident;
           const color = INCIDENT_COLORS[inc.type] || "#6B7280";
           const info = getAlertInfo(inc.type);
-          const isOfficial = inc.reportedBy?.includes("Sistema");
+          const isOfficial = inc.official === true;
           const sourceLabel = isOfficial ? inc.reportedBy?.split(" •")[0]?.trim() ?? "" : "";
           const dist = userLocation
             ? haversineDistance(userLocation.lat, userLocation.lng, inc.location.lat, inc.location.lng)

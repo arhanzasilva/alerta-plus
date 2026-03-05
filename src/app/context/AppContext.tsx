@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, ComponentType } from "react";
-import { generateSeedIncidents, SEED_VERSION, SEED_VERSION_KEY } from "../data/seedIncidents";
+import { generateSeedIncidents } from "../data/seedIncidents";
 import {
   IconFlagFilled,
   IconDropletFilled,
@@ -44,6 +44,7 @@ export interface Incident {
   location: { lat: number; lng: number; address: string };
   timestamp: number;
   reportedBy?: string;
+  official?: boolean;
   confirmations: number;
   denials: number;
   photo?: string;
@@ -339,7 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     floods: true,
     attention: true,
     accessibility: true,
-    noLight: false,
+    noLight: true,
     construction: true,
     crimeZones: true,
   });
@@ -455,28 +456,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedNotifications) });
     } } catch { /* ignore */ }
 
-    // ── Carrega incidentes + mescla dados oficiais (SSP-AM / Defesa Civil) ──
+    // ── Carrega incidentes: seeds sempre frescos do código + alertas do usuário do localStorage ──
     try {
       const seeds = generateSeedIncidents();
-      const savedSeedVersion = localStorage.getItem(SEED_VERSION_KEY);
+      const seedIds = new Set(seeds.map((s) => s.id));
 
-      if (savedIncidents) {
-        const parsed: Incident[] = JSON.parse(savedIncidents);
+      const userIncidents: Incident[] = savedIncidents
+        ? (JSON.parse(savedIncidents) as Incident[]).filter((i) => !seedIds.has(i.id))
+        : [];
 
-        if (savedSeedVersion !== SEED_VERSION) {
-          // Nova versão dos dados oficiais: adiciona seeds que ainda não existem
-          const existingIds = new Set(parsed.map((i) => i.id));
-          const newSeeds = seeds.filter((s) => !existingIds.has(s.id));
-          setIncidents([...parsed, ...newSeeds]);
-          localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
-        } else {
-          setIncidents(parsed);
-        }
-      } else {
-        // Primeira abertura: carrega os dados oficiais
-        setIncidents(seeds);
-        localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
-      }
+      setIncidents([...seeds, ...userIncidents]);
     } catch {
       setIncidents(generateSeedIncidents());
     }
