@@ -174,6 +174,9 @@ function getIncidentIcon(type: string, size = 28) {
   }
 }
 
+// ─── Traffic-related types (shown/hidden by attention layer) ───
+const ATTENTION_TYPES = ["traffic", "accident", "blocked", "closed-road", "police"];
+
 // ─── Filter which incidents are visible based on map layer toggles ───
 function filterVisibleIncidents(
   incidents: Incident[],
@@ -181,13 +184,12 @@ function filterVisibleIncidents(
 ): Incident[] {
   return incidents.filter((inc) => {
     if (inc.status !== "active") return false;
-    // Official (SSP/Defesa Civil) alerts always visible regardless of layer toggles
-    if (inc.id.startsWith("seed-")) return true;
     if (SECURITY_TYPES.includes(inc.type) && !mapLayers.crimeZones) return false;
     if (inc.type === "flood" && !mapLayers.floods) return false;
     if (inc.type === "no-light" && !mapLayers.noLight) return false;
     if (inc.type === "construction" && !mapLayers.construction) return false;
     if (inc.type === "accessibility" && !mapLayers.accessibility) return false;
+    if (ATTENTION_TYPES.includes(inc.type) && !mapLayers.attention) return false;
     return true;
   });
 }
@@ -1445,36 +1447,40 @@ export function MapView() {
                   </div>
                 </div>
 
-                {/* Stats row */}
-                <div className={`mx-5 mb-4 rounded-2xl ${isDark ? "bg-gray-800" : "bg-gray-50"} flex`}>
-                  <div className="flex-1 flex flex-col items-center py-3">
-                    <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.confirmations}</p>
-                    <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.confirmations", language)}</p>
+                {/* Stats row — apenas para alertas de usuários */}
+                {!isOfficial && (
+                  <div className={`mx-5 mb-4 rounded-2xl ${isDark ? "bg-gray-800" : "bg-gray-50"} flex`}>
+                    <div className="flex-1 flex flex-col items-center py-3">
+                      <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.confirmations}</p>
+                      <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.confirmations", language)}</p>
+                    </div>
+                    <div className={`w-px my-3 ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
+                    <div className="flex-1 flex flex-col items-center py-3">
+                      <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.denials}</p>
+                      <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.denials", language)}</p>
+                    </div>
                   </div>
-                  <div className={`w-px my-3 ${isDark ? "bg-gray-700" : "bg-gray-200"}`} />
-                  <div className="flex-1 flex flex-col items-center py-3">
-                    <p className={`${sheetDarkTitle} text-[22px] font-bold font-['Poppins'] leading-none`}>{inc.denials}</p>
-                    <p className={`${sheetTextMuted} text-[11px] font-['Poppins'] mt-1`}>{t("mapview.denials", language)}</p>
-                  </div>
-                </div>
+                )}
 
-                {/* Action buttons */}
-                <div className="px-5 pb-3 flex gap-3">
-                  <button
-                    onClick={() => { confirmIncident(inc.id); toast.success(t("mapview.confirm", language) + "!"); }}
-                    className="flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 transition shadow-md"
-                  >
-                    <IconThumbUp size={18} className="text-white" />
-                    <span className="text-white text-[14px] font-bold font-['Poppins']">{t("mapview.confirm", language)}</span>
-                  </button>
-                  <button
-                    onClick={() => { denyIncident(inc.id); toast(t("mapview.contest", language)); }}
-                    className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 ${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} active:scale-95 transition`}
-                  >
-                    <IconThumbDown size={18} className={sheetTextSec} />
-                    <span className={`${sheetText} text-[14px] font-bold font-['Poppins']`}>{t("mapview.contest", language)}</span>
-                  </button>
-                </div>
+                {/* Action buttons — apenas para alertas de usuários */}
+                {!isOfficial && (
+                  <div className="px-5 pb-3 flex gap-3">
+                    <button
+                      onClick={() => { confirmIncident(inc.id); toast.success(t("mapview.confirm", language) + "!"); }}
+                      className="flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 transition shadow-md"
+                    >
+                      <IconThumbUp size={18} className="text-white" />
+                      <span className="text-white text-[14px] font-bold font-['Poppins']">{t("mapview.confirm", language)}</span>
+                    </button>
+                    <button
+                      onClick={() => { denyIncident(inc.id); toast(t("mapview.contest", language)); }}
+                      className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 ${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} active:scale-95 transition`}
+                    >
+                      <IconThumbDown size={18} className={sheetTextSec} />
+                      <span className={`${sheetText} text-[14px] font-bold font-['Poppins']`}>{t("mapview.contest", language)}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Navigate button */}
                 <div className="px-5 pb-8">

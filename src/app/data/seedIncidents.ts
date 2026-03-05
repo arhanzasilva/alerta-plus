@@ -17,7 +17,7 @@ import type { Incident } from "../context/AppContext";
  * Versão dos dados. Incremente ao atualizar incidentes seed
  * para que novas entradas sejam mescladas nas instalações existentes.
  */
-export const SEED_VERSION = "v3-2024";
+export const SEED_VERSION = "v4-2024";
 export const SEED_VERSION_KEY = "alertaplus_seed_version";
 
 /** Helper: timestamp N horas atrás */
@@ -214,7 +214,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-sec-014",
       type: "crime",
       severity: "high",
-      location: { lat: -3.1382, lng: -59.9952, address: "Mauazinho, Zona Sul" },
+      location: { lat: -3.1298, lng: -59.9952, address: "Mauazinho, Zona Sul" },
       timestamp: ago(38),
       reportedBy: "SSP-AM • Sistema",
       confirmations: 24,
@@ -228,7 +228,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-sec-015",
       type: "crime",
       severity: "high",
-      location: { lat: -3.1452, lng: -60.0282, address: "Colônia Oliveira Machado, Zona Sul" },
+      location: { lat: -3.1375, lng: -60.0282, address: "Colônia Oliveira Machado, Zona Sul" },
       timestamp: ago(28),
       reportedBy: "SSP-AM • Sistema",
       confirmations: 27,
@@ -242,7 +242,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-sec-016",
       type: "theft",
       severity: "high",
-      location: { lat: -3.1338, lng: -60.0148, address: "Educandos — Porto e Feira" },
+      location: { lat: -3.1265, lng: -60.0148, address: "Educandos — Porto e Feira" },
       timestamp: ago(17),
       reportedBy: "SSP-AM • Sistema",
       confirmations: 21,
@@ -358,7 +358,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-flood-001",
       type: "flood",
       severity: "critical",
-      location: { lat: -3.1345, lng: -60.0148, address: "Educandos — Orla do Igarapé do Quarenta" },
+      location: { lat: -3.1272, lng: -60.0148, address: "Educandos — Orla do Igarapé do Quarenta" },
       timestamp: ago(3),
       reportedBy: "Defesa Civil • Sistema",
       confirmations: 55,
@@ -370,7 +370,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-flood-002",
       type: "flood",
       severity: "critical",
-      location: { lat: -3.1455, lng: -60.0288, address: "Colônia Oliveira Machado — Beira do Igarapé" },
+      location: { lat: -3.1388, lng: -60.0288, address: "Colônia Oliveira Machado — Beira do Igarapé" },
       timestamp: ago(2),
       reportedBy: "Defesa Civil • Sistema",
       confirmations: 63,
@@ -394,7 +394,7 @@ export function generateSeedIncidents(): Incident[] {
       id: "seed-flood-004",
       type: "flood",
       severity: "high",
-      location: { lat: -3.1392, lng: -59.9958, address: "Mauazinho — Orla do Rio Negro" },
+      location: { lat: -3.1308, lng: -59.9958, address: "Mauazinho — Orla do Rio Negro" },
       timestamp: ago(48),
       reportedBy: "Defesa Civil • Sistema",
       confirmations: 22,
