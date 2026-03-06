@@ -291,7 +291,7 @@ export function Routes() {
         const results = await mapboxService.getAddressSuggestions(
           origin,
           userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
-          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setOriginSuggestions(results);
       } catch {
@@ -315,7 +315,7 @@ export function Routes() {
         const results = await mapboxService.getAddressSuggestions(
           formOrigin,
           userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
-          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setFormOriginSugg(results);
       } catch {
@@ -339,7 +339,7 @@ export function Routes() {
         const results = await mapboxService.getAddressSuggestions(
           formDestination,
           userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
-          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+          { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setFormDestSugg(results);
       } catch {
@@ -363,7 +363,7 @@ export function Routes() {
         const results = await mapboxService.getAddressSuggestions(
           destination,
           userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
-          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'poi', 'place'] }
+          { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setDestSuggestions(results);
       } catch {

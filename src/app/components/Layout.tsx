@@ -117,7 +117,7 @@ export function Layout() {
   const fullScreenPaths = ["/", "/onboarding", "/splash", "/settings", "/routes", "/report"];
   if (fullScreenPaths.includes(location.pathname)) {
     return (
-      <div className="fixed inset-0">
+      <div className="fixed inset-0" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <AchievementToast />
         <Outlet />
       </div>
@@ -131,7 +131,10 @@ export function Layout() {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-screen overflow-hidden">
+    <div
+      className="flex flex-col lg:flex-row h-screen w-screen overflow-hidden"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <AchievementToast />
 
       {/* Sidebar Navigation (Desktop only - lg+) */}

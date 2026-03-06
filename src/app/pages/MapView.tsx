@@ -602,7 +602,7 @@ export function MapView() {
           {
             limit: 6,
             language: language as 'pt' | 'en' | 'es',
-            types: ['address', 'poi', 'place'],
+            types: ['address', 'street', 'place', 'neighborhood'],
           }
         );
 

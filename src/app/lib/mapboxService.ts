@@ -11,32 +11,36 @@ import { MAPBOX_TOKEN } from "../../config/mapbox";
 // ═══ TIPOS ═══
 // ═══════════════════════════════════════
 
-interface MapboxFeature {
-  id: string;
+// Geocoding API v6
+interface MapboxFeatureV6 {
   type: string;
-  place_type: string[];
-  relevance: number;
-  properties: {
-    accuracy?: string;
-  };
-  text: string;
-  place_name: string;
-  center: [number, number]; // [lng, lat]
   geometry: {
     type: string;
     coordinates: [number, number]; // [lng, lat]
   };
-  context?: Array<{
-    id: string;
-    text: string;
-  }>;
+  properties: {
+    mapbox_id: string;
+    feature_type: string;
+    name: string;
+    name_preferred?: string;
+    full_address?: string;
+    place_formatted?: string;
+    relevance?: number;
+    context?: {
+      country?: { id: string; name: string; country_code?: string };
+      region?: { id: string; name: string };
+      postcode?: { id: string; name: string };
+      place?: { id: string; name: string };
+      locality?: { id: string; name: string };
+      neighborhood?: { id: string; name: string };
+      street?: { id: string; name: string };
+    };
+  };
 }
 
-interface MapboxGeocodingResponse {
+interface MapboxGeocodingResponseV6 {
   type: string;
-  query: string[];
-  features: MapboxFeature[];
-  attribution: string;
+  features: MapboxFeatureV6[];
 }
 
 export interface AddressSuggestion {
@@ -129,7 +133,7 @@ class MapboxService {
     options: {
       limit?: number;
       language?: 'pt' | 'en' | 'es';
-      types?: string[]; // ['address', 'poi', 'place', 'region']
+      types?: string[]; // v6 valid: 'address', 'street', 'place', 'neighborhood', 'locality', 'district'
       bbox?: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
     } = {}
   ): Promise<AddressSuggestion[]> {
@@ -145,17 +149,13 @@ class MapboxService {
     } = options;
 
     try {
-      const encodedQuery = encodeURIComponent(query.trim());
-      const url = new URL(
-        `${this.baseUrl}/geocoding/v5/mapbox.places/${encodedQuery}.json`
-      );
+      const url = new URL(`${this.baseUrl}/search/geocode/v6/forward`);
 
-      // Parâmetros obrigatórios
+      url.searchParams.set('q', query.trim());
       url.searchParams.set('access_token', this.token);
       url.searchParams.set('language', language);
       url.searchParams.set('limit', limit.toString());
 
-      // Parâmetros opcionais
       if (proximity) {
         url.searchParams.set('proximity', `${proximity[0]},${proximity[1]}`);
       }
@@ -174,15 +174,15 @@ class MapboxService {
         throw new Error(`Geocoding API error: ${response.status} ${response.statusText}`);
       }
 
-      const data: MapboxGeocodingResponse = await response.json();
+      const data: MapboxGeocodingResponseV6 = await response.json();
 
       return data.features.map((feature) => ({
-        id: feature.id,
-        label: this.extractShortLabel(feature),
-        address: feature.place_name,
-        lng: feature.center[0],
-        lat: feature.center[1],
-        relevance: feature.relevance,
+        id: feature.properties.mapbox_id,
+        label: this.extractShortLabelV6(feature),
+        address: feature.properties.full_address ?? feature.properties.place_formatted ?? feature.properties.name,
+        lng: feature.geometry.coordinates[0],
+        lat: feature.geometry.coordinates[1],
+        relevance: feature.properties.relevance,
       }));
     } catch (error) {
       console.error('Erro ao buscar endereços:', error);
@@ -213,10 +213,10 @@ class MapboxService {
     language: 'pt' | 'en' | 'es' = 'pt'
   ): Promise<string> {
     try {
-      const url = new URL(
-        `${this.baseUrl}/geocoding/v5/mapbox.places/${lng},${lat}.json`
-      );
+      const url = new URL(`${this.baseUrl}/search/geocode/v6/reverse`);
 
+      url.searchParams.set('longitude', lng.toString());
+      url.searchParams.set('latitude', lat.toString());
       url.searchParams.set('access_token', this.token);
       url.searchParams.set('language', language);
       url.searchParams.set('limit', '1');
@@ -227,13 +227,14 @@ class MapboxService {
         throw new Error(`Reverse geocoding error: ${response.status}`);
       }
 
-      const data: MapboxGeocodingResponse = await response.json();
+      const data: MapboxGeocodingResponseV6 = await response.json();
 
       if (data.features.length === 0) {
         return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       }
 
-      return data.features[0].place_name;
+      const f = data.features[0].properties;
+      return f.full_address ?? f.place_formatted ?? f.name;
     } catch (error) {
       console.error('Erro ao fazer reverse geocoding:', error);
       return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
@@ -338,32 +339,21 @@ class MapboxService {
   // ═══════════════════════════════════════
 
   /**
-   * Extrai um label curto e legível do feature do Mapbox.
-   * Prioriza o nome principal sem informações redundantes.
+   * Extrai um label curto e legível do feature do Mapbox (API v6).
    */
-  private extractShortLabel(feature: MapboxFeature): string {
-    // Para POIs (pontos de interesse), use apenas o nome
-    if (feature.place_type.includes('poi')) {
-      return feature.text;
+  private extractShortLabelV6(feature: MapboxFeatureV6): string {
+    const { name, feature_type, context } = feature.properties;
+
+    // POIs: apenas o nome
+    if (feature_type === 'poi') {
+      return name;
     }
 
-    // Para endereços, combine texto principal + bairro/cidade
-    const parts: string[] = [feature.text];
+    const parts: string[] = [name];
 
-    if (feature.context) {
-      // Adiciona o primeiro contexto relevante (geralmente bairro ou distrito)
-      const neighborhood = feature.context.find(
-        (ctx) => ctx.id.startsWith('neighborhood') || ctx.id.startsWith('locality')
-      );
-      if (neighborhood) {
-        parts.push(neighborhood.text);
-      } else {
-        // Se não tiver bairro, adiciona a cidade
-        const place = feature.context.find((ctx) => ctx.id.startsWith('place'));
-        if (place) {
-          parts.push(place.text);
-        }
-      }
+    if (context) {
+      const sub = context.neighborhood?.name ?? context.locality?.name ?? context.place?.name;
+      if (sub) parts.push(sub);
     }
 
     return parts.join(', ');

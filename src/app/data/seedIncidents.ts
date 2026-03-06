@@ -2,13 +2,14 @@
  * Incidentes pré-populados — Alerta+
  *
  * Fontes:
- *  - SSP-AM: Anuário Estatístico de Segurança Pública 2023/2024
- *  - SESP-AM: Mapa do Crime / Relatório de Ocorrências por Bairro (2024)
- *  - Defesa Civil de Manaus: Relatório de Áreas de Risco de Inundação (2024)
- *  - MANAUSTRANS / SEINFRA: Notificações de obras e interdições (2024)
+ *  - SSP-AM: Anuário Estatístico de Segurança Pública 2025
+ *  - SSP-AM: Ranking de bairros H1 2025 (policia24h.com.br / ssp.am.gov.br)
+ *  - Defesa Civil de Manaus: Relatório de Áreas de Risco de Inundação 2025
+ *  - MANAUSTRANS / SEINFRA: Obras e interdições ativas 2025
  *
  * Estes dados fornecem uma linha de base para o mapa, independente de
  * reportes dos usuários. São atualizados a cada nova versão (SEED_VERSION).
+ * Última atualização: março/2025
  */
 
 import type { Incident } from "../context/AppContext";
@@ -17,7 +18,7 @@ import type { Incident } from "../context/AppContext";
  * Versão dos dados. Incremente ao atualizar incidentes seed
  * para que novas entradas sejam mescladas nas instalações existentes.
  */
-export const SEED_VERSION = "v5-2024";
+export const SEED_VERSION = "v7-2025";
 export const SEED_VERSION_KEY = "alertaplus_seed_version";
 
 /** Helper: timestamp N horas atrás */
@@ -84,7 +85,7 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 28,
       denials: 3,
       status: "active",
-      description: "Alto índice de CVP (Crimes Violentos contra o Patrimônio). Atenção em todos os horários.",
+      description: "Alto índice de roubos e furtos. Atenção em todos os horários.",
     },
 
     // ── Compensa (riskLevel: critical) ──
@@ -98,7 +99,7 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 61,
       denials: 3,
       status: "active",
-      description: "134 ocorrências/mês. CVLI, tráfico e roubos. Disputas territoriais ativas. Evite à noite.",
+      description: "134 ocorrências/mês. Homicídios, tráfico e roubos. Disputas territoriais ativas. Evite à noite.",
     },
     {
       id: "seed-sec-006",
@@ -124,7 +125,7 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 74,
       denials: 4,
       status: "active",
-      description: "156 ocorrências/mês. Uma das áreas com maior índice de homicídios de Manaus (CVLI). Evite trânsito à noite e em ruas secundárias.",
+      description: "156 ocorrências/mês. Uma das áreas com maior índice de homicídios de Manaus. Evite trânsito à noite e em ruas secundárias.",
     },
     {
       id: "seed-sec-008",
@@ -178,7 +179,7 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 37,
       denials: 2,
       status: "active",
-      description: "89 ocorrências/mês. CVLI e tráfico. Baixa cobertura policial em horários noturnos. Evite áreas descampadas.",
+      description: "89 ocorrências/mês. Homicídios e tráfico. Baixa cobertura policial em horários noturnos. Evite áreas descampadas.",
     },
 
     // ── Zumbi dos Palmares (riskLevel: high) ──
@@ -192,7 +193,7 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 29,
       denials: 1,
       status: "active",
-      description: "98 ocorrências/mês. CVLI e roubo. Não utilize atalhos por ruas secundárias.",
+      description: "98 ocorrências/mês. Homicídios e roubo. Não utilize atalhos por ruas secundárias.",
     },
 
     // ── Santo Agostinho (riskLevel: high) ──
@@ -251,18 +252,72 @@ export function generateSeedIncidents(): Incident[] {
       description: "78 ocorrências/mês. Furtos no porto e área comercial. Atenção com pertences pessoais.",
     },
 
-    // ── Cidade Nova (riskLevel: medium) ──
+    // ── João Paulo II (riskLevel: critical) — #1 mais perigoso H1 2025 ──
+    {
+      id: "seed-sec-025",
+      type: "danger-zone",
+      severity: "critical",
+      location: { lat: -3.0279, lng: -59.9293, address: "João Paulo II, Zona Leste" },
+      timestamp: ago(3),
+      reportedBy: "SSP-AM • Sistema",
+      confirmations: 89,
+      denials: 2,
+      status: "active",
+      description: "229 ocorrências/mês. Bairro com maior índice de criminalidade de Manaus em 2025. 1.117 roubos a transeuntes registrados no 1º semestre. Máxima atenção.",
+    },
+    {
+      id: "seed-sec-026",
+      type: "theft",
+      severity: "high",
+      location: { lat: -3.0265, lng: -59.9280, address: "João Paulo II — Área comercial" },
+      timestamp: ago(10),
+      reportedBy: "SSP-AM • Sistema",
+      confirmations: 47,
+      denials: 1,
+      status: "active",
+      description: "Concentração de roubos a transeuntes representando 81% das ocorrências do bairro. Evite circulação com celular visível.",
+    },
+
+    // ── Novo Aleixo (riskLevel: high) — #2 mais perigoso H1 2025 ──
+    {
+      id: "seed-sec-027",
+      type: "assault",
+      severity: "high",
+      location: { lat: -3.0549, lng: -59.9647, address: "Novo Aleixo, Zona Norte" },
+      timestamp: ago(7),
+      reportedBy: "SSP-AM • Sistema",
+      confirmations: 53,
+      denials: 2,
+      status: "active",
+      description: "107 ocorrências/mês. 2º bairro mais perigoso de Manaus em 2025. Alta concentração de roubos a transeuntes na Zona Norte. Evite transitar sozinho.",
+    },
+
+    // ── Cidade de Deus (riskLevel: high) — alta taxa de homicídios ──
+    {
+      id: "seed-sec-028",
+      type: "crime",
+      severity: "high",
+      location: { lat: -3.0187, lng: -59.9504, address: "Cidade de Deus, Zona Norte" },
+      timestamp: ago(15),
+      reportedBy: "SSP-AM • Sistema",
+      confirmations: 41,
+      denials: 3,
+      status: "active",
+      description: "88 ocorrências/mês. Um dos bairros com maior taxa de homicídios ligados ao tráfico em Manaus. Disputas territoriais ativas. Evite à noite.",
+    },
+
+    // ── Cidade Nova (riskLevel: high — atualizado 2025) ──
     {
       id: "seed-sec-017",
       type: "theft",
-      severity: "medium",
+      severity: "high",
       location: { lat: -3.0358, lng: -60.0224, address: "Cidade Nova — Área Comercial" },
       timestamp: ago(8),
       reportedBy: "SSP-AM • Sistema",
-      confirmations: 18,
+      confirmations: 38,
       denials: 1,
       status: "active",
-      description: "67 ocorrências/mês. Furtos de celular em paradas de ônibus. Pico entre 17h–22h.",
+      description: "102 ocorrências/mês. Uma das 3 áreas que concentram 70% dos crimes de Manaus. 102 homicídios ligados ao tráfico registrados. Pico entre 17h–23h.",
     },
 
     // ── Novo Israel (riskLevel: medium) ──
@@ -544,7 +599,31 @@ export function generateSeedIncidents(): Incident[] {
       confirmations: 25,
       denials: 2,
       status: "active",
-      description: "Obra de revitalização da calçada e asfalto. Interdição parcial. Use faixa da esquerda.",
+      description: "Intervenção estratégica 2025. Obras de recapeamento e calçada. Interdição parcial. Use faixa da esquerda.",
+    },
+    {
+      id: "seed-obra-005",
+      type: "construction",
+      severity: "medium",
+      location: { lat: -3.0822, lng: -60.0148, address: "Av. Djalma Batista — trecho Chapada/Parque 10" },
+      timestamp: ago(36),
+      reportedBy: "MANAUSTRANS • Sistema",
+      confirmations: 33,
+      denials: 1,
+      status: "active",
+      description: "Intervenção estratégica 2025. Obras de drenagem e asfalto. Faixa central interditada em trechos. Tráfego lento 07h–09h e 17h–19h.",
+    },
+    {
+      id: "seed-obra-006",
+      type: "construction",
+      severity: "medium",
+      location: { lat: -3.0652, lng: -60.0028, address: "Av. Pedro Teixeira — Cidade Nova/Flores" },
+      timestamp: ago(48),
+      reportedBy: "MANAUSTRANS • Sistema",
+      confirmations: 21,
+      denials: 1,
+      status: "active",
+      description: "Intervenção estratégica 2025. Recapeamento e galeria pluvial. Desvio por ruas paralelas. Previsão: redução de 20 min no tempo médio de deslocamento.",
     },
   ];
 

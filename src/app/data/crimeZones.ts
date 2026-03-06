@@ -1,12 +1,10 @@
 /**
  * Dados de zonas de risco em Manaus - baseados em estatísticas públicas
- * da SSP-AM (Anuário Estatístico de Segurança Pública 2025).
+ * da SSP-AM (Anuário Estatístico de Segurança Pública 2025) e
+ * Policia24h / SSP-AM ranking H1 2025.
  *
- * Categorias de crimes: CVLI (Crimes Violentos Letais Intencionais),
- * CVP (Crimes Violentos contra o Patrimônio), furtos, roubos, etc.
- *
- * Os níveis de risco são derivados das taxas por 100 mil habitantes
- * e da concentração de ocorrências por zona geográfica.
+ * Atualizado: março/2025
+ * Fonte: https://www.ssp.am.gov.br/ssp-dados/
  */
 
 export interface CrimeZone {
@@ -53,7 +51,7 @@ export const CRIME_ZONES: CrimeZone[] = [
     lng: -60.0310,
     radiusMeters: 600,
     riskLevel: "high",
-    crimeTypes: ["Roubo", "Tráfico", "CVLI"],
+    crimeTypes: ["Roubo", "Tráfico", "Homicídio"],
     monthlyIncidents: 95,
     zone: "Centro-Sul",
     safetyTip: "Prefira vias principais e bem iluminadas.",
@@ -66,7 +64,7 @@ export const CRIME_ZONES: CrimeZone[] = [
     lng: -59.9630,
     radiusMeters: 700,
     riskLevel: "high",
-    crimeTypes: ["Roubo de veículo", "Assalto", "CVLI"],
+    crimeTypes: ["Roubo de veículo", "Assalto", "Homicídio"],
     monthlyIncidents: 112,
     zone: "Leste",
     safetyTip: "Evite ruas secundárias após o anoitecer.",
@@ -104,13 +102,26 @@ export const CRIME_ZONES: CrimeZone[] = [
     name: "Cidade Nova",
     lat: -3.0356,
     lng: -60.0222,
-    radiusMeters: 600,
-    riskLevel: "medium",
-    crimeTypes: ["Furto", "Roubo de celular", "Assalto"],
-    monthlyIncidents: 67,
+    radiusMeters: 700,
+    riskLevel: "high",
+    crimeTypes: ["Roubo", "Furto de celular", "Homicídio"],
+    monthlyIncidents: 102,
     zone: "Norte",
-    safetyTip: "Atenção em paradas de ônibus e áreas comerciais.",
-    peakHours: "17h - 22h",
+    safetyTip: "Uma das 3 áreas com maior concentração de crimes. Atenção em paradas de ônibus.",
+    peakHours: "17h - 23h",
+  },
+  {
+    id: "novo-aleixo",
+    name: "Novo Aleixo",
+    lat: -3.0549,
+    lng: -59.9647,
+    radiusMeters: 650,
+    riskLevel: "high",
+    crimeTypes: ["Roubo a transeunte", "Assalto", "Tráfico"],
+    monthlyIncidents: 107,
+    zone: "Norte",
+    safetyTip: "2º bairro mais perigoso de Manaus em 2025. Evite transitar sozinho à noite.",
+    peakHours: "18h - 02h",
   },
   {
     id: "colonia-terra-nova",
@@ -119,8 +130,8 @@ export const CRIME_ZONES: CrimeZone[] = [
     lng: -60.0350,
     radiusMeters: 800,
     riskLevel: "high",
-    crimeTypes: ["CVLI", "Tráfico", "Roubo"],
-    monthlyIncidents: 89,
+    crimeTypes: ["Homicídio", "Tráfico", "Roubo"],
+    monthlyIncidents: 76,
     zone: "Norte",
     safetyTip: "Evite transitar em áreas descampadas à noite.",
     peakHours: "20h - 03h",
@@ -132,13 +143,26 @@ export const CRIME_ZONES: CrimeZone[] = [
     lng: -60.0070,
     radiusMeters: 500,
     riskLevel: "medium",
-    crimeTypes: ["Furto", "Roubo", "Assalto"],
+    crimeTypes: ["Furto de veículo", "Roubo", "Assalto"],
     monthlyIncidents: 54,
     zone: "Norte",
     safetyTip: "Mantenha veículos trancados e não deixe objetos à vista.",
     peakHours: "18h - 23h",
   },
   // ===== ZONA LESTE =====
+  {
+    id: "joao-paulo-ii",
+    name: "João Paulo II",
+    lat: -3.0279,
+    lng: -59.9293,
+    radiusMeters: 850,
+    riskLevel: "critical",
+    crimeTypes: ["Roubo a transeunte", "Assalto", "Furto"],
+    monthlyIncidents: 229,
+    zone: "Leste",
+    safetyTip: "Bairro com maior índice de criminalidade de Manaus (H1 2025). Máxima atenção.",
+    peakHours: "16h - 23h",
+  },
   {
     id: "jorge-teixeira",
     name: "Jorge Teixeira",
@@ -159,7 +183,7 @@ export const CRIME_ZONES: CrimeZone[] = [
     lng: -59.9550,
     radiusMeters: 700,
     riskLevel: "high",
-    crimeTypes: ["CVLI", "Roubo", "Tráfico"],
+    crimeTypes: ["Homicídio", "Roubo", "Tráfico"],
     monthlyIncidents: 98,
     zone: "Leste",
     safetyTip: "Prefira avenidas principais. Evite atalhos.",
@@ -207,13 +231,26 @@ export const CRIME_ZONES: CrimeZone[] = [
   },
   // ===== ZONA SUL =====
   {
+    id: "cidade-de-deus",
+    name: "Cidade de Deus",
+    lat: -3.0187,
+    lng: -59.9504,
+    radiusMeters: 600,
+    riskLevel: "high",
+    crimeTypes: ["Homicídio", "Tráfico", "Roubo"],
+    monthlyIncidents: 88,
+    zone: "Norte",
+    safetyTip: "Alta incidência de homicídios ligados ao tráfico. Evite à noite.",
+    peakHours: "21h - 05h",
+  },
+  {
     id: "colonia-oliveira-machado",
     name: "Colônia Oliveira Machado",
     lat: -3.1450,
     lng: -60.0280,
     radiusMeters: 600,
     riskLevel: "high",
-    crimeTypes: ["Roubo", "Tráfico", "CVLI"],
+    crimeTypes: ["Roubo", "Tráfico", "Homicídio"],
     monthlyIncidents: 76,
     zone: "Sul",
     safetyTip: "Evite áreas próximas ao igarapé à noite.",
