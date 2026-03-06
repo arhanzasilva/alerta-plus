@@ -149,26 +149,30 @@ class MapboxService {
     } = options;
 
     try {
-      const url = new URL(`${this.baseUrl}/search/geocode/v6/forward`);
-
-      url.searchParams.set('q', query.trim());
-      url.searchParams.set('access_token', this.token);
-      url.searchParams.set('language', language);
-      url.searchParams.set('limit', limit.toString());
+      // Constrói a URL manualmente para evitar que URLSearchParams
+      // codifique as vírgulas do parâmetro 'types' (ex: address%2Cstreet),
+      // pois a Geocoding API v6 da Mapbox exige vírgulas literais.
+      const params = new URLSearchParams();
+      params.set('q', query.trim());
+      params.set('access_token', this.token);
+      params.set('language', language);
+      params.set('limit', limit.toString());
 
       if (proximity) {
-        url.searchParams.set('proximity', `${proximity[0]},${proximity[1]}`);
-      }
-
-      if (types && types.length > 0) {
-        url.searchParams.set('types', types.join(','));
+        params.set('proximity', `${proximity[0]},${proximity[1]}`);
       }
 
       if (bbox) {
-        url.searchParams.set('bbox', bbox.join(','));
+        params.set('bbox', bbox.join(','));
       }
 
-      const response = await fetch(url.toString());
+      let urlStr = `${this.baseUrl}/search/geocode/v6/forward?${params.toString()}`;
+
+      if (types && types.length > 0) {
+        urlStr += `&types=${types.join(',')}`;
+      }
+
+      const response = await fetch(urlStr);
 
       if (!response.ok) {
         throw new Error(`Geocoding API error: ${response.status} ${response.statusText}`);
