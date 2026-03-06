@@ -155,9 +155,7 @@ export function Notifications() {
   const filteredNotifications = useMemo(() => {
     return allNotifications
       .filter((n) => {
-        const isOfficial = n.id.startsWith("notif-seed-");
-        // Official (SSP/Defesa Civil) alerts are never dismissed
-        if (!isOfficial && dismissedNotifIds.has(n.id)) return false;
+        if (dismissedNotifIds.has(n.id)) return false;
         // System notifications always show
         if (n.type === "system") return true;
         return n.distance <= selectedRadius;
@@ -179,18 +177,12 @@ export function Notifications() {
     (n) => !dismissedNotifIds.has(n.id) && n.type !== "system" && n.distance <= selectedRadius
   ).length;
   const unreadCount = filteredNotifications.filter((n) => !n.read).length;
-  const readCount = filteredNotifications.filter((n) => n.read).length;
 
   const markAsRead = (id: string) => markNotifRead(id);
   const markAllAsRead = () => markAllNotifsRead(filteredNotifications.map((n) => n.id));
 
-  const clearReadNotifs = () => {
-    const ids = filteredNotifications.filter((n) => n.read && !n.id.startsWith("notif-seed-")).map((n) => n.id);
-    dismissNotifs(ids);
-  };
-
   const clearAllNotifs = () => {
-    dismissNotifs(filteredNotifications.filter((n) => !n.id.startsWith("notif-seed-")).map((n) => n.id));
+    dismissNotifs(filteredNotifications.map((n) => n.id));
   };
 
   const getTimeLabel = (time: number) => {
@@ -301,9 +293,9 @@ export function Notifications() {
                   {t("alerts.readAll", language)}
                 </button>
               )}
-              {(readCount > 0 || filteredNotifications.length > 0) && (
+              {filteredNotifications.length > 0 && (
                 <button
-                  onClick={readCount > 0 ? clearReadNotifs : clearAllNotifs}
+                  onClick={clearAllNotifs}
                   className={`px-3 py-1.5 text-[11px] font-semibold rounded-full active:scale-95 transition font-['Poppins'] flex items-center gap-1 ${isDark ? "text-gray-400 bg-gray-700/50 hover:bg-gray-700" : "text-gray-500 bg-gray-100 hover:bg-gray-200"}`}
                 >
                   <IconTrash className="w-3 h-3" />
@@ -372,10 +364,10 @@ export function Notifications() {
                   key={notif.id}
                   layout
                   initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  animate={{ opacity: notif.read ? 0.4 : 1, y: 0 }}
                   exit={{ opacity: 0, x: -40, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  className={`relative w-full flex items-start gap-3 md:gap-4 border-b ${cardBorder} ${notif.read ? "opacity-40" : ""}`}
+                  transition={{ delay: idx * 0.03, opacity: { duration: 0.3 } }}
+                  className={`relative w-full flex items-start gap-3 md:gap-4 border-b ${cardBorder}`}
                 >
                   <button
                     onClick={() => markAsRead(notif.id)}

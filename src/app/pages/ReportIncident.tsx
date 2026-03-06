@@ -41,10 +41,10 @@ export function ReportIncident() {
   ];
 
   const severityLevels = [
-    { value: "low", label: t("severity.low", language), color: "from-green-500 to-green-600", icon: "●", desc: t("report.lowDesc", language) },
-    { value: "medium", label: t("severity.medium", language), color: "from-yellow-500 to-yellow-600", icon: "●●", desc: t("report.mediumDesc", language) },
-    { value: "high", label: t("severity.high", language), color: "from-orange-500 to-orange-600", icon: "●●●", desc: t("report.highDesc", language) },
-    { value: "critical", label: t("severity.critical", language), color: "from-red-500 to-red-600", icon: "●●●●", desc: t("report.criticalDesc", language) },
+    { value: "low", label: t("severity.low", language), color: "from-green-500 to-green-600", btnColor: "from-green-500 to-green-600 hover:from-green-600 hover:to-green-700", icon: "●", desc: t("report.lowDesc", language) },
+    { value: "medium", label: t("severity.medium", language), color: "from-yellow-500 to-yellow-600", btnColor: "from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700", icon: "●●", desc: t("report.mediumDesc", language) },
+    { value: "high", label: t("severity.high", language), color: "from-orange-500 to-orange-600", btnColor: "from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700", icon: "●●●", desc: t("report.highDesc", language) },
+    { value: "critical", label: t("severity.critical", language), color: "from-red-500 to-red-600", btnColor: "from-red-500 to-red-600 hover:from-red-600 hover:to-red-700", icon: "●●●●", desc: t("report.criticalDesc", language) },
   ];
 
   const handleSubmit = () => {
@@ -230,7 +230,7 @@ export function ReportIncident() {
         <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${isDark ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent`}>
           <button
             onClick={() => setStep(3)}
-            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-orange-700 active:scale-95 transition shadow-2xl"
+            className={`w-full bg-gradient-to-r ${severityLevels.find(s => s.value === selectedSeverity)?.btnColor} text-white py-5 rounded-2xl font-bold text-lg active:scale-95 transition-all duration-300 shadow-2xl`}
           >
             {t("report.continue", language)}
           </button>
@@ -304,7 +304,7 @@ export function ReportIncident() {
       <div className={`relative z-10 p-6 pt-4 flex-shrink-0 bg-gradient-to-t ${isDark ? "from-slate-900 via-slate-900/90" : "from-white via-white/90"} to-transparent space-y-3`}>
         <button
           onClick={handleSubmit}
-          className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-95 transition shadow-2xl flex items-center justify-center gap-3"
+          className={`w-full bg-gradient-to-r ${selectedSeverityData?.btnColor} text-white py-5 rounded-2xl font-bold text-lg active:scale-95 transition-all duration-300 shadow-2xl flex items-center justify-center gap-3`}
         >
           <IconSend className="w-6 h-6" />
           {t("mapview.sendAlert", language)}

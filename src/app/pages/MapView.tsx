@@ -48,6 +48,7 @@ import {
   IconThumbDown,
   IconUser,
   IconShield,
+  IconChevronDown,
 } from "@tabler/icons-react";
 
 // Initialize Mapbox token
@@ -220,6 +221,18 @@ export function MapView() {
   const sheetCardBg = isDark ? "bg-gray-800" : "bg-[#f8f9fa]";
   const sheetDarkTitle = isDark ? "text-white" : "text-[#0a2540]";
   const sheetCardBorder = isDark ? "border-gray-600" : "border-[#e5e7eb]";
+
+  // Bottom sheet collapse state (mobile only)
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false);
+
+  // Reset collapse when resizing to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) setIsSheetCollapsed(false);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // View states
   const [showFilters, setShowFilters] = useState(false);
@@ -628,9 +641,10 @@ export function MapView() {
   }, [userLocation]);
 
   return (
-    <div className="h-full w-full relative bg-[#eee] overflow-hidden lg:flex">
-      {/* ══ Mapbox Container ═══ */}
-      <div ref={mapContainerRef} className="absolute inset-0 lg:static lg:flex-1 z-0" />
+    <div className="flex flex-col absolute inset-0 overflow-hidden bg-[#eee] lg:flex-row lg:relative lg:h-full lg:w-full">
+      {/* ══ Mapbox Container — flex-1 garante height correto em mobile e desktop ═══ */}
+      <div ref={mapContainerRef} className="flex-1 min-h-0 z-0 lg:flex-1" />
+
 
       {/* ═══ Proximity Alert Banner ═══ */}
       <AnimatePresence>
@@ -800,7 +814,7 @@ export function MapView() {
       {/* ═══ Alert FAB (gradient orange) ═══ */}
       <button
         onClick={() => setShowAlertModal(true)}
-        className="absolute right-4 bottom-[380px] lg:bottom-8 lg:left-auto lg:right-[420px] xl:right-[480px] w-14 h-14 lg:w-16 lg:h-16 rounded-full shadow-[0px_25px_50px_0px_rgba(0,0,0,0.25)] flex items-center justify-center z-10 active:scale-90 transition"
+        className={`absolute right-4 ${isSheetCollapsed ? "bottom-[134px]" : "bottom-[380px]"} lg:bottom-8 lg:left-auto lg:right-[420px] xl:right-[480px] w-14 h-14 lg:w-16 lg:h-16 rounded-full shadow-[0px_25px_50px_0px_rgba(0,0,0,0.25)] flex items-center justify-center z-10 active:scale-90 transition-all duration-300`}
         style={{ backgroundImage: "linear-gradient(135deg, #FF8904 0%, #F54900 100%)" }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -815,13 +829,24 @@ export function MapView() {
 
       {/* ═══ Bottom Sheet / Side Panel ═══ */}
       <div className={`absolute bottom-0 left-0 right-0 lg:relative lg:w-[400px] xl:w-[460px] lg:h-full ${sheetBg} rounded-t-[24px] lg:rounded-none z-10 shadow-[0px_-17px_23px_0px_rgba(0,0,0,0.25)] lg:shadow-none lg:border-l ${isDark ? "lg:border-gray-700" : "lg:border-gray-200"} flex flex-col`}>
-        {/* Handle (mobile only) */}
-        <div className="lg:hidden flex justify-center pt-3 pb-2">
+        {/* Handle (mobile only) — tap to collapse/expand */}
+        <button
+          onClick={() => setIsSheetCollapsed((v) => !v)}
+          className="lg:hidden flex flex-col items-center pt-3 pb-1 w-full active:opacity-60 transition"
+          aria-label={isSheetCollapsed ? "Expandir painel" : "Minimizar painel"}
+        >
           <div className={`w-16 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
-        </div>
+          <motion.div
+            animate={{ rotate: isSheetCollapsed ? 180 : 0 }}
+            transition={{ duration: 0.22 }}
+            className="mt-0.5"
+          >
+            <IconChevronDown size={13} className={sheetTextMuted} />
+          </motion.div>
+        </button>
 
-        <div className="px-6 pb-5 lg:py-6 lg:overflow-y-auto lg:flex-1">
-          {/* Search Bar */}
+        <div className="px-6 pb-3 lg:py-6 lg:overflow-y-auto lg:flex-1">
+          {/* Search Bar — always visible */}
           <button
             onClick={() => setShowSearch(true)}
             className={`w-full h-[55px] ${sheetInputBg} rounded-[16px] flex items-center gap-2 px-4 mb-4`}
@@ -831,6 +856,18 @@ export function MapView() {
               {t("mapview.searchPlaceholder", language)}
             </span>
           </button>
+
+          {/* Collapsible: Shortcuts + Recents (hidden on mobile when collapsed) */}
+          <motion.div
+            animate={{
+              height: isSheetCollapsed ? 0 : "auto",
+              opacity: isSheetCollapsed ? 0 : 1,
+            }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden lg:overflow-visible"
+            style={typeof window !== "undefined" && window.innerWidth >= 1024 ? { height: "auto", opacity: 1 } : {}}
+          >
+          <div className="pb-5">
 
           {/* Shortcuts - Horizontal Scroll Carousel */}
           <div className="mb-5 -mx-5">
@@ -1034,6 +1071,9 @@ export function MapView() {
               </div>
             </>
           )}
+
+          </div>{/* end pb-5 */}
+          </motion.div>{/* end collapsible */}
         </div>
       </div>
 
@@ -1524,14 +1564,14 @@ export function MapView() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className={`absolute bottom-0 left-0 right-0 lg:relative lg:w-[650px] lg:max-h-[85vh] ${sheetBg} rounded-t-3xl lg:rounded-3xl z-40 max-h-[85%] overflow-y-auto lg:shadow-2xl`}
+              className={`absolute bottom-0 left-0 right-0 lg:relative lg:w-[650px] lg:max-h-[85vh] ${sheetBg} rounded-t-3xl lg:rounded-3xl z-40 max-h-[92%] overflow-y-auto lg:shadow-2xl`}
             >
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className={`w-16 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
               </div>
 
-              <div className="px-5 pb-24">
+              <div className="px-5 pb-8">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className={`${sheetDarkTitle} text-[20px] font-bold font-['Poppins']`}>
@@ -1630,14 +1670,14 @@ export function MapView() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className={`absolute bottom-0 left-0 right-0 lg:relative lg:w-[600px] lg:max-h-[85vh] ${sheetBg} rounded-t-3xl lg:rounded-3xl z-40 max-h-[70%] overflow-y-auto lg:shadow-2xl`}
+              className={`absolute bottom-0 left-0 right-0 lg:relative lg:w-[600px] lg:max-h-[85vh] ${sheetBg} rounded-t-3xl lg:rounded-3xl z-40 max-h-[92%] overflow-y-auto lg:shadow-2xl`}
             >
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className={`w-16 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
               </div>
 
-              <div className="px-5 pb-24">
+              <div className="px-5 pb-8">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -1780,8 +1820,15 @@ export function MapView() {
                 {/* Submit button */}
                 <button
                   onClick={handleSubmitAlert}
-                  className="w-full h-[56px] rounded-2xl flex items-center justify-center gap-2 active:scale-[0.97] transition shadow-lg"
-                  style={{ backgroundImage: "linear-gradient(135deg, #FF8904 0%, #F54900 100%)" }}
+                  className="w-full h-[56px] rounded-2xl flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-300 shadow-lg"
+                  style={{
+                    backgroundImage: {
+                      low: "linear-gradient(135deg, #6B7280 0%, #4B5563 100%)",
+                      medium: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
+                      high: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)",
+                      critical: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+                    }[severity] ?? "linear-gradient(135deg, #F97316 0%, #EA580C 100%)",
+                  }}
                 >
                   <IconSend size={20} className="text-white" />
                   <span className="text-white text-[16px] font-bold font-['Poppins']">
