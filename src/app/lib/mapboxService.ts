@@ -133,61 +133,100 @@ class MapboxService {
     options: {
       limit?: number;
       language?: 'pt' | 'en' | 'es';
-      types?: string[]; // v6 valid: 'address', 'street', 'place', 'neighborhood', 'locality', 'district'
-      bbox?: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
+      types?: string[];
+      bbox?: [number, number, number, number];
     } = {}
   ): Promise<AddressSuggestion[]> {
     if (!query || query.trim().length < 2) {
       return [];
     }
 
-    const {
-      limit = 5,
-      language = 'pt',
-      types,
-      bbox,
-    } = options;
+    const { limit = 5, language = 'pt', bbox } = options;
+
+    // Usa a Search Box Suggest API (suporta POIs + endereços)
+    // e depois chama retrieve em paralelo para obter coordenadas.
+    const sessionToken = Math.random().toString(36).slice(2);
 
     try {
-      // Constrói a URL manualmente para evitar que URLSearchParams
-      // codifique as vírgulas do parâmetro 'types' (ex: address%2Cstreet),
-      // pois a Geocoding API v6 da Mapbox exige vírgulas literais.
       const params = new URLSearchParams();
       params.set('q', query.trim());
       params.set('access_token', this.token);
       params.set('language', language);
       params.set('limit', limit.toString());
+      params.set('session_token', sessionToken);
 
       if (proximity) {
         params.set('proximity', `${proximity[0]},${proximity[1]}`);
       }
-
       if (bbox) {
         params.set('bbox', bbox.join(','));
       }
 
-      let urlStr = `${this.baseUrl}/search/geocode/v6/forward?${params.toString()}`;
+      const suggestRes = await fetch(
+        `${this.baseUrl}/search/searchbox/v1/suggest?${params.toString()}`
+      );
 
-      if (types && types.length > 0) {
-        urlStr += `&types=${types.join(',')}`;
+      if (!suggestRes.ok) {
+        throw new Error(`Search Box API error: ${suggestRes.status}`);
       }
 
-      const response = await fetch(urlStr);
+      const suggestData = await suggestRes.json() as {
+        suggestions: Array<{
+          mapbox_id: string;
+          name: string;
+          place_formatted?: string;
+          feature_type?: string;
+        }>;
+      };
 
-      if (!response.ok) {
-        throw new Error(`Geocoding API error: ${response.status} ${response.statusText}`);
+      if (!suggestData.suggestions?.length) return [];
+
+      // Retrieve em paralelo para obter coordenadas de cada sugestão
+      const retrieveResults = await Promise.allSettled(
+        suggestData.suggestions.map((s) =>
+          fetch(
+            `${this.baseUrl}/search/searchbox/v1/retrieve/${encodeURIComponent(s.mapbox_id)}?access_token=${this.token}&session_token=${sessionToken}`
+          ).then((r) => r.json())
+        )
+      );
+
+      const results: AddressSuggestion[] = [];
+
+      for (let i = 0; i < suggestData.suggestions.length; i++) {
+        const suggestion = suggestData.suggestions[i];
+        const retrieved = retrieveResults[i];
+
+        if (retrieved.status !== 'fulfilled') continue;
+
+        const feature = retrieved.value?.features?.[0];
+        if (!feature) continue;
+
+        const coords = feature.properties?.coordinates;
+        const lng = coords?.longitude ?? feature.geometry?.coordinates?.[0];
+        const lat = coords?.latitude ?? feature.geometry?.coordinates?.[1];
+
+        if (!lng || !lat) continue;
+
+        const fullAddress =
+          feature.properties?.full_address ??
+          feature.properties?.place_formatted ??
+          suggestion.place_formatted ??
+          suggestion.name;
+
+        const label = suggestion.place_formatted
+          ? suggestion.name
+          : suggestion.name;
+
+        results.push({
+          id: suggestion.mapbox_id,
+          label,
+          address: fullAddress,
+          lng,
+          lat,
+        });
       }
 
-      const data: MapboxGeocodingResponseV6 = await response.json();
-
-      return data.features.map((feature) => ({
-        id: feature.properties.mapbox_id,
-        label: this.extractShortLabelV6(feature),
-        address: feature.properties.full_address ?? feature.properties.place_formatted ?? feature.properties.name,
-        lng: feature.geometry.coordinates[0],
-        lat: feature.geometry.coordinates[1],
-        relevance: feature.properties.relevance,
-      }));
+      return results;
     } catch (error) {
       console.error('Erro ao buscar endereços:', error);
       return [];
