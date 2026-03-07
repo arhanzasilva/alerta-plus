@@ -386,14 +386,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
           },
           () => {},
-          { timeout: 5000, maximumAge: 60000 }
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
         watchId = navigator.geolocation.watchPosition(
           (pos) => {
             setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
           },
           () => {},
-          { enableHighAccuracy: false, maximumAge: 30000 }
+          { enableHighAccuracy: true, maximumAge: 5000 }
         );
       }
     } catch (_e) {
