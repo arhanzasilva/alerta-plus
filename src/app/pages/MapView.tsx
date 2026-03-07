@@ -207,7 +207,7 @@ interface ProximityInfo {
 }
 
 export function MapView() {
-  const { mapLayers, toggleMapLayer, addIncident, confirmIncident, denyIncident, userLocation, incidents, theme, language, distanceUnit, userProfile } = useApp();
+  const { mapLayers, toggleMapLayer, addIncident, confirmIncident, denyIncident, userLocation, setUserLocation, incidents, theme, language, distanceUnit, userProfile } = useApp();
   const isDark = theme === "dark";
   const navigate = useNavigate();
   const { history, addToHistory, removeFromHistory, clearHistory } = useSearchHistory();
@@ -671,6 +671,7 @@ export function MapView() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
+        setUserLocation({ lat, lng });
         if (map) map.flyTo({ center: [lng, lat], zoom: 15, essential: true });
         toast.success("Localização atualizada!");
       },
@@ -683,7 +684,7 @@ export function MapView() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  }, []);
+  }, [setUserLocation]);
 
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden bg-[#eee] lg:flex-row lg:relative lg:h-full lg:w-full">

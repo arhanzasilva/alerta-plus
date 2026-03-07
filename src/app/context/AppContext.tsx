@@ -306,6 +306,7 @@ interface AppContextType {
   distanceUnit: DistanceUnit;
   setDistanceUnit: (unit: DistanceUnit) => void;
   userLocation: { lat: number; lng: number } | null;
+  setUserLocation: (loc: { lat: number; lng: number }) => void;
   favoriteRoutes: FavoriteRoute[];
   addFavoriteRoute: (route: FavoriteRoute) => void;
   removeFavoriteRoute: (id: string) => void;
@@ -765,6 +766,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         distanceUnit,
         setDistanceUnit,
         userLocation,
+        setUserLocation,
         favoriteRoutes,
         addFavoriteRoute,
         removeFavoriteRoute,
