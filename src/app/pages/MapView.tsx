@@ -262,6 +262,24 @@ export function MapView() {
   const [severity, setSeverity] = useState("high");
   const [description, setDescription] = useState("");
 
+  // Location permission banner
+  const [locationPermission, setLocationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+
+  useEffect(() => {
+    if (!navigator.geolocation) { setLocationPermission('denied'); return; }
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted') setLocationPermission('granted');
+        else if (result.state === 'denied') setLocationPermission('denied');
+        else setLocationPermission('unknown'); // 'prompt' — needs user gesture
+        result.onchange = () => {
+          if (result.state === 'granted') setLocationPermission('granted');
+          else if (result.state === 'denied') setLocationPermission('denied');
+        };
+      });
+    }
+  }, []);
+
   // Map center
   const lat = userLocation?.lat || -3.119;
   const lng = userLocation?.lng || -60.021;
@@ -672,11 +690,13 @@ export function MapView() {
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         setUserLocation({ lat, lng });
+        setLocationPermission('granted');
         if (map) map.flyTo({ center: [lng, lat], zoom: 15, essential: true });
         toast.success("Localização atualizada!");
       },
       (err) => {
         if (err.code === 1) {
+          setLocationPermission('denied');
           toast.error("Permissão de localização negada. Ative nas configurações do navegador.");
         } else {
           toast.error("Não foi possível obter o GPS. Tente novamente.");
@@ -691,6 +711,42 @@ export function MapView() {
       {/* ══ Mapbox Container — flex-1 garante height correto em mobile e desktop ═══ */}
       <div ref={mapContainerRef} className="flex-1 min-h-0 z-0 lg:flex-1" />
 
+
+      {/* ═══ Location Permission Banner ═══ */}
+      <AnimatePresence>
+        {locationPermission !== 'granted' && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="absolute top-0 left-0 right-0 z-[30] safe-area-top"
+          >
+            <div className="mx-3 mt-3 rounded-2xl bg-[#0A2540]/95 backdrop-blur-md border border-white/10 px-4 py-3 flex items-center gap-3 shadow-xl">
+              <IconCurrentLocation size={20} className="text-[#2b7fff] shrink-0" />
+              <span className="text-white text-sm flex-1">
+                {locationPermission === 'denied'
+                  ? "Localização bloqueada. Ative nas configurações do navegador."
+                  : "Permita o acesso à sua localização para usar o mapa."}
+              </span>
+              {locationPermission !== 'denied' && (
+                <button
+                  onClick={handleRecenter}
+                  className="shrink-0 bg-[#2b7fff] text-white text-sm font-semibold px-4 py-2 rounded-xl active:opacity-80"
+                >
+                  Permitir
+                </button>
+              )}
+              <button
+                onClick={() => setLocationPermission('granted')}
+                className="shrink-0 text-white/50 active:opacity-80"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ═══ Proximity Alert Banner ═══ */}
       <AnimatePresence>
