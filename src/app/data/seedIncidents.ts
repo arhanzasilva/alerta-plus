@@ -18,7 +18,7 @@ import type { Incident } from "../context/AppContext";
  * Versão dos dados. Incremente ao atualizar incidentes seed
  * para que novas entradas sejam mescladas nas instalações existentes.
  */
-export const SEED_VERSION = "v7-2025";
+export const SEED_VERSION = "v8-2025";
 export const SEED_VERSION_KEY = "alertaplus_seed_version";
 
 /** Helper: timestamp N horas atrás */
