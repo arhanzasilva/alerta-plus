@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
 import { toast } from "sonner";
+import { auth } from "../../config/firebase";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import {
   IconArrowLeft,
   IconUser,
@@ -17,12 +19,7 @@ import {
 
 export function Register() {
   const navigate = useNavigate();
-  const {
-    setUserProfile,
-    setIsOnboarded,
-    theme,
-    language,
-  } = useApp();
+  const { theme, language } = useApp();
   const tc = useThemeClasses(theme);
 
   const [name, setName] = useState("");
@@ -35,55 +32,35 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     if (isLoading) return;
     setError("");
 
-    if (!name.trim()) {
-      setError(t("register.nameRequired", language));
-      return;
-    }
-    if (!email.trim()) {
-      setError(t("register.emailRequired", language));
-      return;
-    }
-    if (password.length < 6) {
-      setError(t("register.passwordMin", language));
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError(t("register.passwordsMismatch", language));
-      return;
-    }
-    if (!agreedTerms) {
-      setError(t("register.acceptTerms", language));
-      return;
-    }
+    if (!name.trim()) { setError(t("register.nameRequired", language)); return; }
+    if (!email.trim()) { setError(t("register.emailRequired", language)); return; }
+    if (password.length < 6) { setError(t("register.passwordMin", language)); return; }
+    if (password !== confirmPassword) { setError(t("register.passwordsMismatch", language)); return; }
+    if (!agreedTerms) { setError(t("register.acceptTerms", language)); return; }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setUserProfile({
-        name: name.trim(),
-        email: email.trim(),
-        neighborhood: "",
-        transportMode: "pedestrian",
-        needs: [],
-        timePreference: "both",
-        points: 0,
-        trustLevel: 1,
-        badges: [],
-        reportsCount: 0,
-        impactCount: 0,
-        confirmationsGiven: 0,
-        denialsGiven: 0,
-        routesSearched: 0,
-        loginMethod: "email",
-      });
-      setIsOnboarded(true);
-      setIsLoading(false);
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await updateProfile(credential.user, { displayName: name.trim() });
+      // Pre-save name so onAuthStateChanged finds it immediately
+      localStorage.setItem(`alertaplus_profile_${credential.user.uid}`, JSON.stringify({ name: name.trim() }));
       toast.success(t("register.success", language));
-      navigate("/profile", { replace: true });
-    }, 1500);
+      navigate("/map", { replace: true });
+    } catch (err: any) {
+      if (err.code === "auth/email-already-in-use") {
+        setError(t("register.emailInUse", language));
+      } else if (err.code === "auth/invalid-email") {
+        setError(t("register.emailRequired", language));
+      } else {
+        setError(t("login.errorGeneric", language));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

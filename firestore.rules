@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Incidents ──
+    match /incidents/{incidentId} {
+      // Anyone can read incidents (public map data)
+      allow read: if true;
+
+      // Only authenticated users can create incidents
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['type', 'location', 'timestamp', 'status', 'severity', 'confirmations', 'denials'])
+        && request.resource.data.confirmations is int
+        && request.resource.data.denials is int;
+
+      // Only allow updates to confirmations/denials/status (vote & expiration)
+      allow update: if
+        // Authenticated users can vote (only confirmations or denials change by 1)
+        (request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmations', 'denials'])
+        )
+        ||
+        // Status update (expiration) — any authenticated user can trigger
+        (request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        );
+
+      allow delete: if false;
+    }
+
+    // ── Users ──
+    match /users/{userId} {
+      // Users can only read and write their own profile
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

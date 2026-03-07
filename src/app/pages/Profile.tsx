@@ -35,6 +35,7 @@ export function Profile() {
     userProfile,
     setUserProfile,
     updateUserProfile,
+    firebaseSignOut,
     setIsOnboarded,
     incidents,
     toggleTheme,
@@ -658,7 +659,8 @@ export function Profile() {
 
           {/* Logout */}
           <button
-            onClick={() => {
+            onClick={async () => {
+              await firebaseSignOut();
               setUserProfile(null);
               setIsOnboarded(false);
               navigate("/onboarding");

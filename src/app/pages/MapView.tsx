@@ -51,6 +51,10 @@ import {
   IconChevronDown,
   IconShare2,
   IconCheck,
+  IconSkull,
+  IconUsers,
+  IconLock,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 
 // Initialize Mapbox token
@@ -87,10 +91,12 @@ const INCIDENT_COLORS: Record<string, string> = {
   construction: "#F59E0B",
   obstacle: "#6B7280",
   accessibility: "#6366F1",
+  "drug-traffic": "#7B0D1E",
+  "gang-territory": "#7B0D1E",
 };
 
 // ─── Security-related types (show as risk zones) ───
-const SECURITY_TYPES = ["crime", "danger-zone", "theft", "assault"];
+const SECURITY_TYPES = ["crime", "danger-zone", "theft", "assault", "drug-traffic", "gang-territory"];
 
 // ─── Alert Categories Data ───
 const ALERT_CATEGORIES = [
@@ -127,6 +133,15 @@ const ALERT_CATEGORIES = [
       { id: "construction", label: "Obras", color: "#3B82F6", icon: <IconCrane size={22} /> },
       { id: "accessibility", label: "Acessibilidade", color: "#3B82F6", icon: <IconWheelchair size={22} /> },
       { id: "obstacle", label: "Obstaculo", color: "#3B82F6", icon: <IconBarrierBlock size={22} /> },
+    ],
+  },
+  {
+    group: "Ponto Fixo",
+    color: "#7B0D1E",
+    icon: <IconLock size={18} />,
+    items: [
+      { id: "drug-traffic", label: "Boca de Tráfico", color: "#7B0D1E", icon: <IconSkull size={22} /> },
+      { id: "gang-territory", label: "Território de Gangue", color: "#7B0D1E", icon: <IconUsers size={22} /> },
     ],
   },
   {
@@ -172,10 +187,15 @@ function getIncidentIcon(type: string, size = 28) {
     case "no-light":    return <IconBulbOff size={size} />;
     case "construction":return <IconCrane size={size} />;
     case "obstacle":    return <IconBarrierBlock size={size} />;
-    case "accessibility":return <IconWheelchair size={size} />;
-    default:            return <IconShield size={size} />;
+    case "accessibility":   return <IconWheelchair size={size} />;
+    case "drug-traffic":    return <IconSkull size={size} />;
+    case "gang-territory":  return <IconUsers size={size} />;
+    default:                return <IconShield size={size} />;
   }
 }
+
+// ─── Fixed point types (permanent alerts with source field) ───
+const FIXED_POINT_TYPES = ["drug-traffic", "gang-territory"];
 
 // ─── Traffic-related types (shown/hidden by attention layer) ───
 const ATTENTION_TYPES = ["traffic", "accident", "blocked", "closed-road", "police"];
@@ -245,6 +265,8 @@ export function MapView() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [selectedAlertType, setSelectedAlertType] = useState<string | null>(null);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
+  const [isPermanent, setIsPermanent] = useState(false);
+  const [officialSource, setOfficialSource] = useState("");
   const [alertTargetCoords, setAlertTargetCoords] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
@@ -527,6 +549,8 @@ export function MapView() {
 
   const handleSelectAlertType = (typeId: string) => {
     setSelectedAlertType(typeId);
+    setIsPermanent(false);
+    setOfficialSource("");
     setShowAlertModal(false);
     setShowAlertDetails(true);
   };
@@ -567,25 +591,35 @@ export function MapView() {
 
   const handleSubmitAlert = useCallback(() => {
     if (!selectedAlertType) return;
+
     const loc = alertTargetCoords ?? {
       lat: userLocation?.lat || -3.119,
       lng: userLocation?.lng || -60.021,
       address: t("mapview.nearYourLocation", language),
     };
+    const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
     addIncident({
       type: selectedAlertType as any,
       severity: severity as any,
       location: loc,
       description: description || undefined,
       reportedBy: userProfile?.name || t("mapview.anonymous", language),
+      ...(isPermanent && {
+        official: true,
+        permanent: true,
+        officialSource: officialSource.trim() || undefined,
+        nextReviewAt: Date.now() + SIX_MONTHS_MS,
+      }),
     });
     setShowAlertDetails(false);
     setSelectedAlertType(null);
     setSeverity("high");
     setDescription("");
+    setIsPermanent(false);
+    setOfficialSource("");
     setAlertTargetCoords(null);
-    toast.success(t("mapview.alertSent", language));
-  }, [selectedAlertType, severity, description, addIncident, userLocation, alertTargetCoords, language, userProfile]);
+    toast.success(isPermanent ? "Ponto fixo registrado!" : t("mapview.alertSent", language));
+  }, [selectedAlertType, severity, description, isPermanent, officialSource, addIncident, userLocation, alertTargetCoords, language, userProfile]);
 
   // ═══ Reverse geocode clicked map location ═══
   useEffect(() => {
@@ -1949,13 +1983,57 @@ export function MapView() {
                   className={`w-full h-[80px] ${sheetCardBg} rounded-2xl p-4 text-[14px] font-['Poppins'] ${isDark ? "placeholder:text-gray-500 text-white border-gray-600" : "placeholder:text-[#9ca3af] text-[#0a2540] border-[#e5e7eb]"} focus:outline-none border resize-none mb-3`}
                 />
 
+                {/* Ponto Fixo — só para drug-traffic e gang-territory */}
+                {selectedAlertType && FIXED_POINT_TYPES.includes(selectedAlertType) && (
+                  <div className="mb-4">
+                    <button
+                      onClick={() => setIsPermanent(p => !p)}
+                      className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition ${
+                        isPermanent
+                          ? "border-[#7B0D1E] bg-[#7B0D1E]/10"
+                          : isDark ? "border-gray-600 bg-gray-800" : "border-[#e5e7eb] bg-white"
+                      }`}
+                    >
+                      <div className={`w-10 h-6 rounded-full flex items-center transition-all p-0.5 ${isPermanent ? "bg-[#7B0D1E] justify-end" : isDark ? "bg-gray-600 justify-start" : "bg-gray-200 justify-start"}`}>
+                        <div className="w-5 h-5 rounded-full bg-white shadow" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className={`text-[14px] font-semibold font-['Poppins'] ${isPermanent ? "text-[#7B0D1E]" : sheetDarkTitle}`}>
+                          Fixar no mapa permanentemente
+                        </p>
+                        <p className={`text-[11px] font-['Poppins'] ${sheetTextMuted}`}>
+                          Não expira — revisão solicitada a cada 6 meses
+                        </p>
+                      </div>
+                      <IconLock size={18} className={isPermanent ? "text-[#7B0D1E]" : sheetTextMuted} />
+                    </button>
+
+                    {isPermanent && (
+                      <div className="mt-2">
+                        <p className={`text-[12px] font-['Poppins'] ${sheetTextMuted} mb-1.5 flex items-center gap-1`}>
+                          <IconInfoCircle size={13} /> Fonte da informação (opcional)
+                        </p>
+                        <input
+                          type="text"
+                          value={officialSource}
+                          onChange={(e) => setOfficialSource(e.target.value)}
+                          placeholder='Ex: "PM 12ª CICOM", "Guarda Municipal", "Fonte anônima"'
+                          className={`w-full h-11 ${sheetCardBg} rounded-xl px-4 text-[13px] font-['Poppins'] ${isDark ? "placeholder:text-gray-500 text-white border-gray-600" : "placeholder:text-[#9ca3af] text-[#0a2540] border-[#e5e7eb]"} focus:outline-none border`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Points earned */}
+                {!isPermanent && (
                 <p className={`text-center text-[13px] font-['Poppins'] ${sheetTextMuted} mb-4`}>
                   <IconBolt size={14} className="inline-block text-[#F97316] -mt-0.5" /> {t("mapview.youWillEarn", language)}{" "}
                   <span className="text-[#F97316] font-bold">
                     +{severity === "low" ? 5 : severity === "medium" ? 10 : severity === "high" ? 15 : 20} {t("mapview.points", language)}
                   </span>
                 </p>
+                )}
 
                 {/* Submit button */}
                 <button
@@ -1970,9 +2048,9 @@ export function MapView() {
                     }[severity] ?? "linear-gradient(135deg, #F97316 0%, #EA580C 100%)",
                   }}
                 >
-                  <IconSend size={20} className="text-white" />
+                  {isPermanent ? <IconLock size={20} className="text-white" /> : <IconSend size={20} className="text-white" />}
                   <span className="text-white text-[16px] font-bold font-['Poppins']">
-                    {t("mapview.sendAlert", language)}
+                    {isPermanent ? "Registrar Ponto Fixo" : t("mapview.sendAlert", language)}
                   </span>
                 </button>
               </div>

@@ -4,6 +4,12 @@ import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
 import { toast } from "sonner";
+import { auth, googleProvider } from "../../config/firebase";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import {
   IconArrowLeft,
   IconMail,
@@ -50,98 +56,65 @@ export function Login() {
     };
   }, []);
 
-  const handleSendReset = () => {
+  const handleSendReset = async () => {
     if (!resetEmail.trim() || isSendingReset) return;
     setIsSendingReset(true);
-    resetTimerRef.current = setTimeout(() => {
-      setIsSendingReset(false);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail.trim());
+      toast.success(t("login.resetSuccess", language));
       setShowForgotModal(false);
       setResetEmail("");
-      toast.success(t("login.resetSuccess", language));
-    }, 1500);
+    } catch {
+      toast.success(t("login.resetSuccess", language)); // neutral — don't reveal if email exists
+      setShowForgotModal(false);
+      setResetEmail("");
+    } finally {
+      setIsSendingReset(false);
+    }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     if (isLoading) return;
     setError("");
     setLoginMode("google");
     setIsLoading(true);
-    const gEmail = "usuario@gmail.com";
-    googleTimerRef.current = setTimeout(() => {
-      if (userProfileRef.current) {
-        updateUserProfile({ email: gEmail, loginMethod: "google" });
-      } else {
-        setUserProfile({
-          name: t("login.googleUserName", language),
-          email: gEmail,
-          neighborhood: "",
-          transportMode: "pedestrian",
-          needs: [],
-          timePreference: "both",
-          points: 0,
-          trustLevel: 1,
-          badges: [],
-          reportsCount: 0,
-          impactCount: 0,
-          confirmationsGiven: 0,
-          denialsGiven: 0,
-          routesSearched: 0,
-          loginMethod: "google",
-        });
-        setIsOnboarded(true);
-      }
-      setIsLoading(false);
+    try {
+      await signInWithPopup(auth, googleProvider);
       toast.success(t("login.successGoogle", language));
       navigate("/map", { replace: true });
-    }, 1500);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        setError(t("login.errorGeneric", language));
+      }
+    } finally {
+      setIsLoading(false);
+      setLoginMode(null);
+    }
   };
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
     if (isLoading) return;
     setError("");
 
-    if (!email.trim()) {
-      setError(t("login.emailRequired", language));
-      return;
-    }
-    if (password.length < 6) {
-      setError(t("login.passwordMin", language));
-      return;
-    }
+    if (!email.trim()) { setError(t("login.emailRequired", language)); return; }
+    if (password.length < 6) { setError(t("login.passwordMin", language)); return; }
 
     setLoginMode("email");
     setIsLoading(true);
-    emailTimerRef.current = setTimeout(() => {
-      if (userProfileRef.current) {
-        updateUserProfile({
-          email: email.trim(),
-          name: email.split("@")[0],
-          loginMethod: "email",
-        });
-      } else {
-        setUserProfile({
-          name: email.split("@")[0],
-          email: email.trim(),
-          neighborhood: "",
-          transportMode: "pedestrian",
-          needs: [],
-          timePreference: "both",
-          points: 0,
-          trustLevel: 1,
-          badges: [],
-          reportsCount: 0,
-          impactCount: 0,
-          confirmationsGiven: 0,
-          denialsGiven: 0,
-          routesSearched: 0,
-          loginMethod: "email",
-        });
-        setIsOnboarded(true);
-      }
-      setIsLoading(false);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       toast.success(t("login.successEmail", language));
       navigate("/map", { replace: true });
-    }, 1500);
+    } catch (err: any) {
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setError(t("login.errorInvalidCredentials", language));
+      } else {
+        setError(t("login.errorGeneric", language));
+      }
+    } finally {
+      setIsLoading(false);
+      setLoginMode(null);
+    }
   };
 
   return (

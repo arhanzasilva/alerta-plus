@@ -1,5 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, ComponentType } from "react";
-import { generateSeedIncidents } from "../data/seedIncidents";
+import { generateSeedIncidents, SEED_VERSION, SEED_VERSION_KEY } from "../data/seedIncidents";
+import { haversineDistance } from "../data/crimeZones";
+import { useNotifications } from "../hooks/useNotifications";
+import { db, auth } from "../../config/firebase";
+import {
+  collection, onSnapshot, doc, setDoc, getDoc, addDoc, updateDoc, increment,
+  getDocs, writeBatch, query, where,
+} from "firebase/firestore";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   IconFlagFilled,
   IconDropletFilled,
@@ -40,11 +48,14 @@ export interface UserProfile {
 
 export interface Incident {
   id: string;
-  type: "flood" | "obstacle" | "accessibility" | "construction" | "no-light" | "crime" | "danger-zone" | "theft" | "assault";
+  type: "flood" | "obstacle" | "accessibility" | "construction" | "no-light" | "crime" | "danger-zone" | "theft" | "assault" | "drug-traffic" | "gang-territory";
   location: { lat: number; lng: number; address: string };
   timestamp: number;
   reportedBy?: string;
   official?: boolean;
+  permanent?: boolean;
+  officialSource?: string;
+  nextReviewAt?: number;
   confirmations: number;
   denials: number;
   photo?: string;
@@ -89,6 +100,20 @@ export interface AchievementDef {
   condition: (profile: UserProfile, incidents: Incident[]) => boolean;
   progress: (profile: UserProfile, incidents: Incident[]) => { current: number; target: number };
 }
+
+const INCIDENT_TYPE_LABELS: Record<string, string> = {
+  flood: "Alagamento",
+  obstacle: "Obstáculo na via",
+  accessibility: "Problema de acessibilidade",
+  construction: "Obra na via",
+  "no-light": "Sem iluminação",
+  crime: "Ocorrência policial",
+  "danger-zone": "Zona de perigo",
+  theft: "Furto/Roubo",
+  assault: "Assalto",
+  "drug-traffic": "Boca de tráfico",
+  "gang-territory": "Território de gangue",
+};
 
 export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   {
@@ -283,6 +308,7 @@ interface AppContextType {
   userProfile: UserProfile | null;
   setUserProfile: (profile: UserProfile | null) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
+  firebaseSignOut: () => Promise<void>;
   authStatus: AuthStatus;
   isOnboarded: boolean;
   setIsOnboarded: (value: boolean) => void;
@@ -365,6 +391,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const prevUnlockedRef = useRef<Map<string, number>>(new Map());
   const hasLoadedRef = useRef(false);
+  const authUidRef = useRef<string | null>(null);
+  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const knownIncidentIdsRef = useRef<Set<string>>(new Set());
 
   // Derive auth status from profile state
   // guest = no profile (skipped onboarding or not started)
@@ -412,11 +441,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Firebase Auth state listener — load profile from Firestore on login
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        authUidRef.current = firebaseUser.uid;
+        const loginMethod = (firebaseUser.providerData[0]?.providerId === "google.com" ? "google" : "email") as "google" | "email";
+        const defaults: UserProfile = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuário",
+          email: firebaseUser.email || "",
+          loginMethod,
+          transportMode: "pedestrian",
+          needs: [],
+          timePreference: "both",
+          points: 0,
+          trustLevel: 1,
+          badges: [],
+          reportsCount: 0,
+          impactCount: 0,
+          confirmationsGiven: 0,
+          denialsGiven: 0,
+          routesSearched: 0,
+        };
+
+        try {
+          const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (snap.exists()) {
+            const raw = snap.data() as Partial<UserProfile> & {
+              achievements?: Record<string, number>;
+              favoriteRoutes?: FavoriteRoute[];
+              notificationSettings?: Partial<NotificationSettings>;
+            };
+            const { achievements: achData, favoriteRoutes: favData, notificationSettings: notifData, ...profileData } = raw;
+            setUserProfileState({ ...defaults, ...profileData, id: firebaseUser.uid, loginMethod });
+            // Load achievements from Firestore
+            if (achData) {
+              const map = new Map<string, number>();
+              Object.entries(achData).forEach(([id, ts]) => map.set(id, ts));
+              setUnlockedAchievementIds(map);
+              prevUnlockedRef.current = map;
+            }
+            // Load favorites from Firestore
+            if (favData) setFavoriteRoutes(favData);
+            // Load notification settings from Firestore
+            if (notifData) setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...notifData });
+          } else {
+            // New user — save defaults to Firestore
+            await setDoc(doc(db, "users", firebaseUser.uid), defaults);
+            setUserProfileState(defaults);
+          }
+        } catch {
+          // Offline fallback: try localStorage cache
+          const cached = localStorage.getItem(`alertaplus_profile_${firebaseUser.uid}`);
+          setUserProfileState(cached ? { ...defaults, ...JSON.parse(cached) } : defaults);
+        }
+        setIsOnboarded(true);
+      } else {
+        authUidRef.current = null;
+        // Logged out — restore anonymous/guest state
+        const savedProfile = localStorage.getItem("alertaplus_profile");
+        if (savedProfile) {
+          try { setUserProfileState(JSON.parse(savedProfile)); } catch { setUserProfileState(null); }
+        } else {
+          setUserProfileState(null);
+        }
+      }
+    });
+    return unsub;
+  }, []);
+
   // Load from localStorage
   useEffect(() => {
     const savedProfile = localStorage.getItem("alertaplus_profile");
     const savedOnboarded = localStorage.getItem("alertaplus_onboarded");
-    const savedIncidents = localStorage.getItem("alertaplus_incidents");
     const savedTheme = localStorage.getItem("alertaplus_theme");
     const savedLanguage = localStorage.getItem("alertaplus_language");
     const savedDistanceUnit = localStorage.getItem("alertaplus_distance_unit");
@@ -457,30 +555,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(savedNotifications) });
     } } catch { /* ignore */ }
 
-    // ── Carrega incidentes: seeds sempre frescos do código + alertas do usuário do localStorage ──
-    try {
-      const seeds = generateSeedIncidents();
-      const seedIds = new Set(seeds.map((s) => s.id));
-
-      const userIncidents: Incident[] = savedIncidents
-        ? (JSON.parse(savedIncidents) as Incident[]).filter((i) => !seedIds.has(i.id))
-        : [];
-
-      setIncidents([...seeds, ...userIncidents]);
-    } catch {
-      setIncidents(generateSeedIncidents());
-    }
-
     // Delay flag so save effects don't fire with initial (empty) state
-    // on the same render cycle as the load effect
     queueMicrotask(() => { hasLoadedRef.current = true; });
   }, []);
 
-  // Save to localStorage (guard against writing before load completes)
+  // Save profile: Firestore (authenticated) + localStorage cache
   useEffect(() => {
     if (!hasLoadedRef.current) return;
     if (userProfile) {
-      localStorage.setItem("alertaplus_profile", JSON.stringify(userProfile));
+      if (userProfile.id && userProfile.loginMethod) {
+        // Authenticated user — save to Firestore + localStorage cache
+        const { id, ...data } = userProfile;
+        updateDoc(doc(db, "users", id), data).catch(() => {
+          // Offline — will sync next time
+        });
+        localStorage.setItem(`alertaplus_profile_${id}`, JSON.stringify(userProfile));
+      } else {
+        // Anonymous/guest — localStorage only
+        localStorage.setItem("alertaplus_profile", JSON.stringify(userProfile));
+      }
     } else {
       localStorage.removeItem("alertaplus_profile");
     }
@@ -490,11 +583,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!hasLoadedRef.current) return;
     localStorage.setItem("alertaplus_onboarded", JSON.stringify(isOnboarded));
   }, [isOnboarded]);
-
-  useEffect(() => {
-    if (!hasLoadedRef.current) return;
-    localStorage.setItem("alertaplus_incidents", JSON.stringify(incidents));
-  }, [incidents]);
 
   useEffect(() => {
     localStorage.setItem("alertaplus_theme", theme);
@@ -511,15 +599,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem("alertaplus_favorites", JSON.stringify(favoriteRoutes));
+    if (hasLoadedRef.current && authUidRef.current) {
+      updateDoc(doc(db, "users", authUidRef.current), { favoriteRoutes }).catch(() => {});
+    }
   }, [favoriteRoutes]);
 
   useEffect(() => {
     const entries = [...unlockedAchievementIds.entries()].map(([id, unlockedAt]) => ({ id, unlockedAt }));
     localStorage.setItem("alertaplus_achievements", JSON.stringify(entries));
+    if (hasLoadedRef.current && authUidRef.current) {
+      const achObj: Record<string, number> = {};
+      unlockedAchievementIds.forEach((ts, id) => { achObj[id] = ts; });
+      updateDoc(doc(db, "users", authUidRef.current), { achievements: achObj }).catch(() => {});
+    }
   }, [unlockedAchievementIds]);
 
   useEffect(() => {
     localStorage.setItem("alertaplus_notifications", JSON.stringify(notificationSettings));
+    if (hasLoadedRef.current && authUidRef.current) {
+      updateDoc(doc(db, "users", authUidRef.current), { notificationSettings }).catch(() => {});
+    }
   }, [notificationSettings]);
 
   useEffect(() => {
@@ -614,17 +713,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDistanceUnitState(unit);
   }, []);
 
-  // ============= INCIDENTS =============
+  // ============= INCIDENTS — Firestore =============
+
+  // Seed Firestore on first load (check version key in localStorage)
+  useEffect(() => {
+    const seedFirestore = async () => {
+      const storedVersion = localStorage.getItem(SEED_VERSION_KEY);
+      if (storedVersion === SEED_VERSION) return; // already seeded this version
+
+      const seeds = generateSeedIncidents();
+      const batch = writeBatch(db);
+      seeds.forEach((inc) => {
+        batch.set(doc(db, "incidents", inc.id), inc);
+      });
+      await batch.commit();
+      localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
+    };
+    seedFirestore().catch(console.error);
+  }, []);
+
+  // Keep userLocationRef in sync (used inside onSnapshot closure without re-subscribing)
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
+
+  // Real-time listener + proximity notifications for new incidents
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "incidents"), (snap) => {
+      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Incident));
+
+      // Notify user about new active incidents within 2 km
+      if (
+        knownIncidentIdsRef.current.size > 0 &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const loc = userLocationRef.current;
+        if (loc) {
+          data.forEach((inc) => {
+            if (inc.status !== "active" || knownIncidentIdsRef.current.has(inc.id)) return;
+            const dist = haversineDistance(loc.lat, loc.lng, inc.location.lat, inc.location.lng);
+            if (dist <= 2000) {
+              const label = INCIDENT_TYPE_LABELS[inc.type] ?? inc.type;
+              new Notification("⚠️ Alerta próximo a você", {
+                body: `${label} — ${inc.location.address}`,
+                icon: "/favicon.png",
+                badge: "/favicon.png",
+              });
+            }
+          });
+        }
+      }
+
+      knownIncidentIdsRef.current = new Set(data.map((d) => d.id));
+      setIncidents(data);
+    });
+    return unsub;
+  }, []);
+
+  // Auto-expiração (atualiza Firestore — idempotente entre clientes)
+  useEffect(() => {
+    const EXPIRE_AFTER_MS = 4 * 60 * 60 * 1000;
+    const EXPIRE_FIXED_MS = 30 * 24 * 60 * 60 * 1000;
+    const FIXED_TYPES = ["drug-traffic", "gang-territory"];
+    const MIN_DENIALS = 3;
+
+    const check = async () => {
+      const now = Date.now();
+      const snap = await getDocs(query(collection(db, "incidents"), where("status", "==", "active")));
+      const batch = writeBatch(db);
+      let changed = false;
+      snap.docs.forEach((d) => {
+        const inc = d.data() as Incident;
+        if (inc.id?.startsWith("seed-") || inc.permanent) return;
+        const expireMs = FIXED_TYPES.includes(inc.type) ? EXPIRE_FIXED_MS : EXPIRE_AFTER_MS;
+        const tooOld = now - inc.timestamp > expireMs;
+        const contested = inc.denials >= MIN_DENIALS && inc.denials > inc.confirmations;
+        if (tooOld || contested) {
+          batch.update(d.ref, { status: "expired" });
+          changed = true;
+        }
+      });
+      if (changed) await batch.commit();
+    };
+
+    const interval = setInterval(check, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const addIncident = useCallback((incident: Omit<Incident, "id" | "timestamp" | "confirmations" | "denials" | "status">) => {
-    const newIncident: Incident = {
+    const raw = {
       ...incident,
-      id: Date.now().toString(),
       timestamp: Date.now(),
       confirmations: 1,
       denials: 0,
-      status: "active",
+      status: "active" as const,
     };
-    setIncidents((prev) => [newIncident, ...prev]);
+    // Firestore rejects undefined values — strip them out
+    const newIncident = Object.fromEntries(
+      Object.entries(raw).filter(([, v]) => v !== undefined)
+    );
+    addDoc(collection(db, "incidents"), newIncident).catch(console.error);
 
     const impactDelta = Math.floor(Math.random() * 5) + 1;
     setUserProfileState((prev) => {
@@ -643,60 +832,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const confirmIncident = useCallback((id: string) => {
-    setIncidents((prev) =>
-      prev.map((inc) =>
-        inc.id === id ? { ...inc, confirmations: inc.confirmations + 1 } : inc
-      )
-    );
-
+    updateDoc(doc(db, "incidents", id), { confirmations: increment(1) }).catch(console.error);
     setUserProfileState((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        points: prev.points + 5,
-        confirmationsGiven: (prev.confirmationsGiven || 0) + 1,
-      };
+      return { ...prev, points: prev.points + 5, confirmationsGiven: (prev.confirmationsGiven || 0) + 1 };
     });
   }, []);
 
   const denyIncident = useCallback((id: string) => {
-    setIncidents((prev) =>
-      prev.map((inc) =>
-        inc.id === id ? { ...inc, denials: inc.denials + 1 } : inc
-      )
-    );
-
+    updateDoc(doc(db, "incidents", id), { denials: increment(1) }).catch(console.error);
     setUserProfileState((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        denialsGiven: (prev.denialsGiven || 0) + 1,
-      };
+      return { ...prev, denialsGiven: (prev.denialsGiven || 0) + 1 };
     });
-  }, []);
-
-  // Auto-expiração de alertas de usuários (não seed)
-  // Expira se: > 4h OU (contestações >= 3 E contestações > confirmações)
-  useEffect(() => {
-    const EXPIRE_AFTER_MS = 4 * 60 * 60 * 1000; // 4 horas
-    const MIN_DENIALS = 3;
-
-    const check = () => {
-      const now = Date.now();
-      setIncidents((prev) =>
-        prev.map((inc) => {
-          if (inc.status !== "active" || inc.id.startsWith("seed-")) return inc;
-          const tooOld = now - inc.timestamp > EXPIRE_AFTER_MS;
-          const contested = inc.denials >= MIN_DENIALS && inc.denials > inc.confirmations;
-          if (tooOld || contested) return { ...inc, status: "expired" };
-          return inc;
-        })
-      );
-    };
-
-    check();
-    const interval = setInterval(check, 5 * 60 * 1000); // verifica a cada 5 min
-    return () => clearInterval(interval);
   }, []);
 
   const toggleMapLayer = useCallback((layer: keyof typeof mapLayers) => {
@@ -731,6 +879,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotificationSettings((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  // FCM: register token for authenticated users + handle foreground messages
+  useNotifications(userProfile?.id && userProfile?.loginMethod ? userProfile.id : null);
+
   // Build unlocked achievements list (Map preserves unlockedAt timestamp)
   const unlockedAchievements: Achievement[] = ACHIEVEMENT_DEFS
     .filter((def) => unlockedAchievementIds.has(def.id))
@@ -750,6 +901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         userProfile,
         setUserProfile,
         updateUserProfile,
+        firebaseSignOut: () => signOut(auth),
         authStatus,
         isOnboarded,
         setIsOnboarded,
