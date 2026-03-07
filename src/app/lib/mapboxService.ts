@@ -143,90 +143,56 @@ class MapboxService {
 
     const { limit = 5, language = 'pt', bbox } = options;
 
-    // Usa a Search Box Suggest API (suporta POIs + endereços)
-    // e depois chama retrieve em paralelo para obter coordenadas.
-    const sessionToken = Math.random().toString(36).slice(2);
-
     try {
+      // Geocoding v6 forward — retorna coordenadas diretamente, sem round-trip extra.
+      // URLSearchParams é usado apenas para parâmetros simples (sem vírgulas).
       const params = new URLSearchParams();
       params.set('q', query.trim());
       params.set('access_token', this.token);
       params.set('language', language);
       params.set('limit', limit.toString());
-      params.set('session_token', sessionToken);
+      params.set('country', 'br');
+
+      // Concatenar proximity e bbox manualmente para evitar que URLSearchParams
+      // codifique as vírgulas como %2C (o que causa erros na API do Mapbox).
+      let urlStr = `${this.baseUrl}/search/geocode/v6/forward?${params.toString()}`;
 
       if (proximity) {
-        params.set('proximity', `${proximity[0]},${proximity[1]}`);
+        urlStr += `&proximity=${proximity[0]},${proximity[1]}`;
       }
       if (bbox) {
-        params.set('bbox', bbox.join(','));
+        urlStr += `&bbox=${bbox.join(',')}`;
       }
 
-      const suggestRes = await fetch(
-        `${this.baseUrl}/search/searchbox/v1/suggest?${params.toString()}`
-      );
+      const response = await fetch(urlStr);
 
-      if (!suggestRes.ok) {
-        throw new Error(`Search Box API error: ${suggestRes.status}`);
+      if (!response.ok) {
+        throw new Error(`Geocoding v6 error: ${response.status}`);
       }
 
-      const suggestData = await suggestRes.json() as {
-        suggestions: Array<{
-          mapbox_id: string;
-          name: string;
-          place_formatted?: string;
-          feature_type?: string;
-        }>;
-      };
+      const data: MapboxGeocodingResponseV6 = await response.json();
 
-      if (!suggestData.suggestions?.length) return [];
+      if (!data.features?.length) return [];
 
-      // Retrieve em paralelo para obter coordenadas de cada sugestão
-      const retrieveResults = await Promise.allSettled(
-        suggestData.suggestions.map((s) =>
-          fetch(
-            `${this.baseUrl}/search/searchbox/v1/retrieve/${encodeURIComponent(s.mapbox_id)}?access_token=${this.token}&session_token=${sessionToken}`
-          ).then((r) => r.json())
-        )
-      );
+      return data.features.map((feature) => {
+        const props = feature.properties;
+        const [lng, lat] = feature.geometry.coordinates;
 
-      const results: AddressSuggestion[] = [];
+        const label = props.name_preferred ?? props.name;
+        const address =
+          props.full_address ??
+          props.place_formatted ??
+          props.name;
 
-      for (let i = 0; i < suggestData.suggestions.length; i++) {
-        const suggestion = suggestData.suggestions[i];
-        const retrieved = retrieveResults[i];
-
-        if (retrieved.status !== 'fulfilled') continue;
-
-        const feature = retrieved.value?.features?.[0];
-        if (!feature) continue;
-
-        const coords = feature.properties?.coordinates;
-        const lng = coords?.longitude ?? feature.geometry?.coordinates?.[0];
-        const lat = coords?.latitude ?? feature.geometry?.coordinates?.[1];
-
-        if (!lng || !lat) continue;
-
-        const fullAddress =
-          feature.properties?.full_address ??
-          feature.properties?.place_formatted ??
-          suggestion.place_formatted ??
-          suggestion.name;
-
-        const label = suggestion.place_formatted
-          ? suggestion.name
-          : suggestion.name;
-
-        results.push({
-          id: suggestion.mapbox_id,
+        return {
+          id: props.mapbox_id,
           label,
-          address: fullAddress,
+          address,
           lng,
           lat,
-        });
-      }
-
-      return results;
+          relevance: props.relevance,
+        };
+      });
     } catch (error) {
       console.error('Erro ao buscar endereços:', error);
       return [];
