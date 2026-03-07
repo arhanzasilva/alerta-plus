@@ -663,11 +663,27 @@ export function MapView() {
 
   const handleRecenter = useCallback(() => {
     const map = mapRef.current;
-    if (map && userLocation) {
-      map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 15, essential: true });
+    if (!navigator.geolocation) {
+      toast.error("GPS não suportado neste dispositivo.");
+      return;
     }
-    toast("Centralizando no GPS...");
-  }, [userLocation]);
+    toast("Obtendo localização...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        if (map) map.flyTo({ center: [lng, lat], zoom: 15, essential: true });
+        toast.success("Localização atualizada!");
+      },
+      (err) => {
+        if (err.code === 1) {
+          toast.error("Permissão de localização negada. Ative nas configurações do navegador.");
+        } else {
+          toast.error("Não foi possível obter o GPS. Tente novamente.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }, []);
 
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden bg-[#eee] lg:flex-row lg:relative lg:h-full lg:w-full">
