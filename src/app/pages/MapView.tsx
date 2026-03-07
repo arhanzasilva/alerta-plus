@@ -245,6 +245,7 @@ export function MapView() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [selectedAlertType, setSelectedAlertType] = useState<string | null>(null);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
+  const [alertTargetCoords, setAlertTargetCoords] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -566,14 +567,15 @@ export function MapView() {
 
   const handleSubmitAlert = useCallback(() => {
     if (!selectedAlertType) return;
+    const loc = alertTargetCoords ?? {
+      lat: userLocation?.lat || -3.119,
+      lng: userLocation?.lng || -60.021,
+      address: t("mapview.nearYourLocation", language),
+    };
     addIncident({
       type: selectedAlertType as any,
       severity: severity as any,
-      location: {
-        lat: userLocation?.lat || -3.119,
-        lng: userLocation?.lng || -60.021,
-        address: t("mapview.nearYourLocation", language),
-      },
+      location: loc,
       description: description || undefined,
       reportedBy: userProfile?.name || t("mapview.anonymous", language),
     });
@@ -581,8 +583,9 @@ export function MapView() {
     setSelectedAlertType(null);
     setSeverity("high");
     setDescription("");
+    setAlertTargetCoords(null);
     toast.success(t("mapview.alertSent", language));
-  }, [selectedAlertType, severity, description, addIncident, userLocation, language, userProfile]);
+  }, [selectedAlertType, severity, description, addIncident, userLocation, alertTargetCoords, language, userProfile]);
 
   // ═══ Reverse geocode clicked map location ═══
   useEffect(() => {
@@ -1212,27 +1215,42 @@ export function MapView() {
                 <IconX size={15} />
               </button>
             </div>
-            <button
-              onClick={() => {
-                if (!clickedAddress) return;
-                const coords = clickedCoords;
-                setClickedCoords(null);
-                navigate("/routes", {
-                  state: {
-                    origin: t("mapview.currentLocation", language),
-                    originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
-                    destination: clickedAddress,
-                    destinationCoords: { lng: coords.lng, lat: coords.lat },
-                    autoSearch: true,
-                  },
-                });
-              }}
-              disabled={isLoadingClickedAddress || !clickedAddress}
-              className="w-full mt-3 h-10 bg-[#2b7fff] rounded-xl flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-40"
-            >
-              <IconNavigation size={15} className="text-white" />
-              <span className="text-white text-[13px] font-semibold font-['Poppins']">{t("mapview.navigateHere", language)}</span>
-            </button>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => {
+                  if (!clickedAddress || !clickedCoords) return;
+                  setAlertTargetCoords({ lat: clickedCoords.lat, lng: clickedCoords.lng, address: clickedAddress });
+                  setClickedCoords(null);
+                  setShowAlertModal(true);
+                }}
+                disabled={isLoadingClickedAddress || !clickedAddress}
+                className="flex-1 h-10 bg-red-500 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-40"
+              >
+                <IconAlertTriangle size={15} className="text-white" />
+                <span className="text-white text-[13px] font-semibold font-['Poppins']">Reportar alerta</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (!clickedAddress) return;
+                  const coords = clickedCoords;
+                  setClickedCoords(null);
+                  navigate("/routes", {
+                    state: {
+                      origin: t("mapview.currentLocation", language),
+                      originCoords: userLocation ? { lng: userLocation.lng, lat: userLocation.lat } : undefined,
+                      destination: clickedAddress,
+                      destinationCoords: { lng: coords.lng, lat: coords.lat },
+                      autoSearch: true,
+                    },
+                  });
+                }}
+                disabled={isLoadingClickedAddress || !clickedAddress}
+                className="flex-1 h-10 bg-[#2b7fff] rounded-xl flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-40"
+              >
+                <IconNavigation size={15} className="text-white" />
+                <span className="text-white text-[13px] font-semibold font-['Poppins']">{t("mapview.navigateHere", language)}</span>
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
