@@ -46,21 +46,28 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
           {
-            // Cache Mapbox tiles
+            // Geocoding e Directions API — nunca cachear (token, resultados dinâmicos)
+            urlPattern: /^https:\/\/api\.mapbox\.com\/(search|directions)\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            // Outros recursos da API Mapbox (styles, sprites) — network first, só cache 200
             urlPattern: /^https:\/\/api\.mapbox\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'mapbox-cache',
+              cacheName: 'mapbox-api',
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
-            // Cache Mapbox tiles CDN
+            // Tiles do mapa CDN — cache first, só cache 200
             urlPattern: /^https:\/\/.*\.mapbox\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'mapbox-tiles',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],
