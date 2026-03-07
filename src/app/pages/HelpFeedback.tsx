@@ -16,7 +16,6 @@ import {
   IconPaw,
   IconDots,
   IconSend,
-  IconLoader2,
   IconShieldCheck,
   IconInfoCircle,
 } from "@tabler/icons-react";
@@ -47,7 +46,6 @@ export function HelpFeedback() {
   const [selectedType, setSelectedType] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [comment, setComment] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -63,7 +61,6 @@ export function HelpFeedback() {
   }, [dropdownOpen]);
 
   const handleSend = () => {
-    if (isLoading) return;
     setError("");
 
     if (!selectedType) {
@@ -75,13 +72,14 @@ export function HelpFeedback() {
       return;
     }
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success(t("help.success", language));
-      setSelectedType("");
-      setComment("");
-    }, 1500);
+    const typeLabel = t(`help.${selectedType}`, language);
+    const subject = encodeURIComponent(`[Alerta+] ${typeLabel}`);
+    const body = encodeURIComponent(`Tipo: ${typeLabel}\n\n${comment}\n\n---\nEnviado pelo Alerta+`);
+    window.open(`mailto:feedback@alertaplus.app?subject=${subject}&body=${body}`, "_blank");
+
+    toast.success(t("help.success", language));
+    setSelectedType("");
+    setComment("");
   };
 
   const selectedTypeData = HELP_TYPES.find((ht) => ht.key === selectedType);
@@ -274,16 +272,11 @@ export function HelpFeedback() {
 
           {/* Send button */}
           <button
-            disabled={isLoading}
             onClick={handleSend}
-            className="w-full h-[49px] bg-[#00bc7d] rounded-[14px] text-white text-[14px] font-medium font-['Poppins'] shadow-[0px_10px_15px_rgba(0,188,125,0.2),0px_4px_6px_rgba(0,188,125,0.2)] active:scale-[0.97] transition disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full h-[49px] bg-[#00bc7d] rounded-[14px] text-white text-[14px] font-medium font-['Poppins'] shadow-[0px_10px_15px_rgba(0,188,125,0.2),0px_4px_6px_rgba(0,188,125,0.2)] active:scale-[0.97] transition flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <IconLoader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <IconSend className="w-5 h-5" />
-            )}
-            {isLoading ? t("help.sending", language) : t("help.sendHelp", language)}
+            <IconSend className="w-5 h-5" />
+            {t("help.sendHelp", language)}
           </button>
 
           {/* Info box */}

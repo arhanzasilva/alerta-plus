@@ -147,6 +147,8 @@ export function Layout() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
+              aria-current={isActive ? "page" : undefined}
+              aria-label={item.label}
               className="flex flex-col items-center justify-center gap-2 w-16 xl:w-20 py-3 rounded-2xl hover:bg-white/5 active:scale-95 transition relative group"
             >
               <motion.div
@@ -219,6 +221,8 @@ export function Layout() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
+              aria-current={isActive ? "page" : undefined}
+              aria-label={item.label}
               className="flex flex-col items-center justify-center gap-1 w-[60px] h-[64px] mt-2 active:scale-95 transition relative"
             >
               <motion.div

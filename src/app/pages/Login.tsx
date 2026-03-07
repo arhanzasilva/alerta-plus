@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
 import { toast } from "sonner";
@@ -32,6 +32,10 @@ export function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginMode, setLoginMode] = useState<"email" | "google" | null>(null);
   const [error, setError] = useState("");
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const userProfileRef = useRef(userProfile);
   userProfileRef.current = userProfile;
@@ -42,8 +46,20 @@ export function Login() {
     return () => {
       if (googleTimerRef.current) clearTimeout(googleTimerRef.current);
       if (emailTimerRef.current) clearTimeout(emailTimerRef.current);
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     };
   }, []);
+
+  const handleSendReset = () => {
+    if (!resetEmail.trim() || isSendingReset) return;
+    setIsSendingReset(true);
+    resetTimerRef.current = setTimeout(() => {
+      setIsSendingReset(false);
+      setShowForgotModal(false);
+      setResetEmail("");
+      toast.success(t("login.resetSuccess", language));
+    }, 1500);
+  };
 
   const handleGoogleLogin = () => {
     if (isLoading) return;
@@ -151,7 +167,7 @@ export function Login() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="px-5 pt-6 pb-8"
+          className="px-5 pt-6 pb-8 max-w-md mx-auto"
         >
           {/* Logo + heading */}
           <div className="flex flex-col items-center mb-6">
@@ -299,7 +315,10 @@ export function Login() {
 
           {/* Forgot password */}
           <div className="flex justify-end mb-4">
-            <button className="text-[13px] font-medium font-['Poppins'] text-[#2b7fff]">
+            <button
+              onClick={() => { setResetEmail(email); setShowForgotModal(true); }}
+              className="text-[13px] font-medium font-['Poppins'] text-[#2b7fff]"
+            >
               {t("login.forgotPassword", language)}
             </button>
           </div>
@@ -348,6 +367,67 @@ export function Login() {
           </div>
         </motion.div>
       </div>
+
+      {/* ── Forgot Password Modal ── */}
+      <AnimatePresence>
+        {showForgotModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowForgotModal(false); }}
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`w-full max-w-sm rounded-3xl p-6 ${tc.isDark ? "bg-[#1f2937]" : "bg-white"} shadow-2xl`}
+            >
+              <h3 className={`text-[17px] font-bold font-['Poppins'] ${tc.textPrimary} mb-1`}>
+                {t("login.resetTitle", language)}
+              </h3>
+              <p className={`text-[13px] font-['Poppins'] ${tc.textSecondary} mb-5 leading-relaxed`}>
+                {t("login.resetSubtitle", language)}
+              </p>
+
+              <label className={`block text-[12px] font-medium font-['Poppins'] ${tc.textSecondary} mb-1.5`}>
+                {t("login.resetEmailLabel", language)}
+              </label>
+              <div className="relative mb-5">
+                <IconMail className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] ${tc.isDark ? "text-gray-500" : "text-[#99a1af]"}`} />
+                <input
+                  type="email"
+                  placeholder={t("login.emailPlaceholder", language)}
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendReset()}
+                  className={`w-full h-[50px] pl-11 pr-4 rounded-[14px] border text-[14px] font-['Poppins'] outline-none transition focus:ring-2 focus:ring-[#2b7fff]/30 focus:border-[#2b7fff] ${tc.inputBg}`}
+                  autoFocus
+                />
+              </div>
+
+              <button
+                disabled={!resetEmail.trim() || isSendingReset}
+                onClick={handleSendReset}
+                className="w-full h-[49px] bg-[#2b7fff] rounded-[14px] text-white text-[14px] font-medium font-['Poppins'] active:scale-[0.97] transition disabled:opacity-50 flex items-center justify-center gap-2 mb-3"
+              >
+                {isSendingReset && <IconLoader2 className="w-5 h-5 animate-spin" />}
+                {isSendingReset ? t("login.resetSending", language) : t("login.resetSend", language)}
+              </button>
+
+              <button
+                onClick={() => { setShowForgotModal(false); setResetEmail(""); }}
+                className={`w-full h-[44px] rounded-[14px] text-[14px] font-medium font-['Poppins'] transition active:scale-[0.97] ${tc.isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-800"}`}
+              >
+                {t("login.resetCancel", language)}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

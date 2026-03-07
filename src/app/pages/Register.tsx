@@ -109,7 +109,7 @@ export function Register() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="px-5 pt-5 pb-8"
+          className="px-5 pt-5 pb-8 max-w-md mx-auto"
         >
           {/* Subtitle */}
           <p className={`text-[13px] font-['Poppins'] ${tc.textSecondary} mb-5 leading-[20px]`}>

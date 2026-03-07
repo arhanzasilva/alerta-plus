@@ -446,10 +446,10 @@ export function Notifications() {
                   {!notif.id.startsWith("notif-seed-") && (
                     <button
                       onClick={(e) => { e.stopPropagation(); dismissNotif(notif.id); }}
-                      className={`flex-shrink-0 self-center mr-3 w-7 h-7 rounded-full flex items-center justify-center transition active:scale-90 ${isDark ? "text-gray-500 hover:text-gray-300 hover:bg-gray-700" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
-                      aria-label="Dispensar notificação"
+                      className={`flex-shrink-0 self-center mr-2 w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90 ${isDark ? "text-gray-500 hover:text-gray-300 hover:bg-gray-700" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
+                      aria-label={t("alerts.dismiss", language)}
                     >
-                      <IconX className="w-3.5 h-3.5" />
+                      <IconX className="w-4 h-4" />
                     </button>
                   )}
                 </motion.div>

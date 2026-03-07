@@ -49,6 +49,8 @@ import {
   IconUser,
   IconShield,
   IconChevronDown,
+  IconShare2,
+  IconCheck,
 } from "@tabler/icons-react";
 
 // Initialize Mapbox token
@@ -246,6 +248,7 @@ export function MapView() {
   const [proximityAlert, setProximityAlert] = useState<ProximityInfo | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [votedIncidents, setVotedIncidents] = useState<Record<string, 'confirm' | 'deny'>>({});
 
   // Style version – incremented after map.setStyle() finishes loading, to force overlay re-render
   const [styleVersion, setStyleVersion] = useState(0);
@@ -515,6 +518,32 @@ export function MapView() {
       if (item) return { ...item, group: cat.group };
     }
     return null;
+  };
+
+  const handleConfirmVote = (id: string) => {
+    if (votedIncidents[id]) return;
+    confirmIncident(id);
+    setVotedIncidents(prev => ({ ...prev, [id]: 'confirm' }));
+    toast.success(t("mapview.confirm", language) + "!");
+  };
+
+  const handleDenyVote = (id: string) => {
+    if (votedIncidents[id]) return;
+    denyIncident(id);
+    setVotedIncidents(prev => ({ ...prev, [id]: 'deny' }));
+    toast(t("mapview.contest", language));
+  };
+
+  const handleShareAlert = (inc: Incident) => {
+    const typeLabel = getAlertInfo(inc.type)?.label ?? inc.type;
+    const text = `🚨 ${typeLabel} em ${inc.location.address}. Veja no Alerta+`;
+    const url = 'https://alerta-plus.vercel.app';
+    if (navigator.share) {
+      navigator.share({ title: 'Alerta+', text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(`${text}\n${url}`);
+      toast.success(t("mapview.copiedToClipboard", language));
+    }
   };
 
   const handleSubmitAlert = useCallback(() => {
@@ -1505,21 +1534,49 @@ export function MapView() {
                 {!isOfficial && (
                   <div className="px-5 pb-3 flex gap-3">
                     <button
-                      onClick={() => { confirmIncident(inc.id); toast.success(t("mapview.confirm", language) + "!"); }}
-                      className="flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 transition shadow-md"
+                      onClick={() => handleConfirmVote(inc.id)}
+                      disabled={!!votedIncidents[inc.id]}
+                      className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 transition shadow-md active:scale-95
+                        ${votedIncidents[inc.id] === 'confirm'
+                          ? 'bg-emerald-500 cursor-default'
+                          : votedIncidents[inc.id] === 'deny'
+                          ? 'bg-emerald-500 opacity-40 cursor-default'
+                          : 'bg-emerald-500 hover:bg-emerald-600'}`}
                     >
-                      <IconThumbUp size={18} className="text-white" />
+                      {votedIncidents[inc.id] === 'confirm'
+                        ? <IconCheck size={18} className="text-white" />
+                        : <IconThumbUp size={18} className="text-white" />}
                       <span className="text-white text-[14px] font-bold font-['Poppins']">{t("mapview.confirm", language)}</span>
                     </button>
                     <button
-                      onClick={() => { denyIncident(inc.id); toast(t("mapview.contest", language)); }}
-                      className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 ${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} active:scale-95 transition`}
+                      onClick={() => handleDenyVote(inc.id)}
+                      disabled={!!votedIncidents[inc.id]}
+                      className={`flex-1 h-12 rounded-2xl flex items-center justify-center gap-2 transition active:scale-95
+                        ${votedIncidents[inc.id] === 'deny'
+                          ? `${isDark ? 'bg-gray-600' : 'bg-gray-300'} cursor-default`
+                          : votedIncidents[inc.id] === 'confirm'
+                          ? `${isDark ? 'bg-gray-700' : 'bg-gray-100'} opacity-40 cursor-default`
+                          : `${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}`}
                     >
-                      <IconThumbDown size={18} className={sheetTextSec} />
+                      {votedIncidents[inc.id] === 'deny'
+                        ? <IconCheck size={18} className={sheetTextSec} />
+                        : <IconThumbDown size={18} className={sheetTextSec} />}
                       <span className={`${sheetText} text-[14px] font-bold font-['Poppins']`}>{t("mapview.contest", language)}</span>
                     </button>
                   </div>
                 )}
+
+                {/* Share button */}
+                <div className="px-5 pb-3">
+                  <button
+                    onClick={() => handleShareAlert(inc)}
+                    className={`w-full h-11 rounded-2xl border flex items-center justify-center gap-2 active:scale-95 transition
+                      ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    <IconShare2 size={16} />
+                    <span className="text-[14px] font-semibold font-['Poppins']">Compartilhar</span>
+                  </button>
+                </div>
 
                 {/* Navigate button */}
                 <div className="px-5 pb-8">
@@ -1571,7 +1628,7 @@ export function MapView() {
                 <div className={`w-16 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
               </div>
 
-              <div className="px-5 pb-8">
+              <div className="px-5 pb-24 lg:pb-8">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className={`${sheetDarkTitle} text-[20px] font-bold font-['Poppins']`}>
@@ -1677,7 +1734,7 @@ export function MapView() {
                 <div className={`w-16 h-1.5 ${isDark ? "bg-gray-600" : "bg-[#d1d5dc]"} rounded-full`} />
               </div>
 
-              <div className="px-5 pb-8">
+              <div className="px-5 pb-20 lg:pb-8">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -1800,14 +1857,6 @@ export function MapView() {
                   placeholder='Ex: "Vi pessoas suspeitas na esquina..."'
                   className={`w-full h-[80px] ${sheetCardBg} rounded-2xl p-4 text-[14px] font-['Poppins'] ${isDark ? "placeholder:text-gray-500 text-white border-gray-600" : "placeholder:text-[#9ca3af] text-[#0a2540] border-[#e5e7eb]"} focus:outline-none border resize-none mb-3`}
                 />
-
-                {/* Add photo */}
-                <button className={`w-full h-[48px] border ${sheetCardBorder} rounded-2xl flex items-center justify-center gap-2 mb-3`}>
-                  <IconCamera size={16} className={sheetTextMuted} />
-                  <span className={`${sheetTextMuted} text-[14px] font-['Poppins']`}>
-                    {t("mapview.addPhoto", language)}
-                  </span>
-                </button>
 
                 {/* Points earned */}
                 <p className={`text-center text-[13px] font-['Poppins'] ${sheetTextMuted} mb-4`}>

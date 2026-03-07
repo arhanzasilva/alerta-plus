@@ -46,6 +46,7 @@ export function Profile() {
   const navigate = useNavigate();
   const [showLoginOptions, setShowLoginOptions] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const isDark = theme === "dark";
   const pageBg = isDark ? "bg-[#111827]" : "bg-[#F8F9FB]";
   const headerBg = isDark ? "bg-[#1f2937]" : "bg-white";
@@ -495,12 +496,7 @@ export function Profile() {
 
             {/* Reset Profile */}
             <button
-              onClick={() => {
-                setUserProfile(null);
-                setIsOnboarded(false);
-                localStorage.removeItem("alertaplus_profile");
-                navigate("/onboarding");
-              }}
+              onClick={() => setShowResetConfirm(true)}
               className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition border mt-3 ${isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"}`}
             >
               <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
@@ -515,6 +511,55 @@ export function Profile() {
             </p>
           </div>
         </div>
+
+        {/* Reset Confirm Modal */}
+        <AnimatePresence>
+          {showResetConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
+              style={{ background: "rgba(0,0,0,0.5)" }}
+              onClick={(e) => { if (e.target === e.currentTarget) setShowResetConfirm(false); }}
+            >
+              <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className={`w-full max-w-sm rounded-3xl p-6 ${isDark ? "bg-[#1f2937]" : "bg-white"} shadow-2xl`}
+              >
+                <div className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center mb-4">
+                  <IconRefresh className="w-6 h-6 text-white" />
+                </div>
+                <h3 className={`text-[17px] font-bold font-['Poppins'] ${isDark ? "text-white" : "text-gray-900"} mb-2`}>
+                  {t("profile.resetConfirmTitle", language)}
+                </h3>
+                <p className={`text-[13px] font-['Poppins'] ${isDark ? "text-gray-400" : "text-gray-500"} mb-6 leading-relaxed`}>
+                  {t("profile.resetConfirmDesc", language)}
+                </p>
+                <button
+                  onClick={() => {
+                    setUserProfile(null);
+                    setIsOnboarded(false);
+                    localStorage.removeItem("alertaplus_profile");
+                    navigate("/onboarding");
+                  }}
+                  className="w-full h-[49px] bg-orange-500 hover:bg-orange-600 rounded-[14px] text-white text-[14px] font-bold font-['Poppins'] active:scale-[0.97] transition mb-3"
+                >
+                  {t("profile.resetConfirmBtn", language)}
+                </button>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className={`w-full h-[44px] rounded-[14px] text-[14px] font-medium font-['Poppins'] transition active:scale-[0.97] ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-800"}`}
+                >
+                  {t("login.resetCancel", language)}
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
