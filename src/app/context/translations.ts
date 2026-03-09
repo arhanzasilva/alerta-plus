@@ -109,6 +109,10 @@ const translations: Record<Language, Record<string, string>> = {
     "profile.resetConfirmBtn": "Sim, resetar",
     "profile.connectedVia": "Conectado via",
     "profile.account": "Conta",
+    "profile.trust.beginner": "Iniciante",
+    "profile.trust.active": "Ativo",
+    "profile.trust.trusted": "Confiável",
+    "profile.trust.veteran": "Veterano",
 
     // Login page
     "login.accountLogin": "Conta e login",
@@ -644,6 +648,10 @@ const translations: Record<Language, Record<string, string>> = {
     "profile.resetConfirmBtn": "Yes, reset",
     "profile.connectedVia": "Connected via",
     "profile.account": "Account",
+    "profile.trust.beginner": "Beginner",
+    "profile.trust.active": "Active",
+    "profile.trust.trusted": "Trusted",
+    "profile.trust.veteran": "Veteran",
 
     // Login page
     "login.accountLogin": "Account and login",
@@ -1171,6 +1179,10 @@ const translations: Record<Language, Record<string, string>> = {
     "profile.resetConfirmBtn": "Sí, restablecer",
     "profile.connectedVia": "Conectado a través de",
     "profile.account": "Cuenta",
+    "profile.trust.beginner": "Principiante",
+    "profile.trust.active": "Activo",
+    "profile.trust.trusted": "Confiable",
+    "profile.trust.veteran": "Veterano",
 
     // Login page
     "login.accountLogin": "Cuenta e inicio de sesión",

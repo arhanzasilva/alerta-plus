@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router";
 import {
   IconBell,
   IconBellOff,
@@ -35,11 +36,6 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function formatDistance(meters: number): string {
-  if (meters < 100) return `${Math.round(meters)} m`;
-  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
 
 interface NotifItem {
   id: string;
@@ -105,7 +101,10 @@ export function Notifications() {
 
   // readIds and dismissedIds come from AppContext so Layout badge stays in sync
 
-  const [selectedRadius, setSelectedRadius] = useState(500);
+  const [selectedRadius, setSelectedRadius] = useState(Infinity);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigate = useNavigate();
   // Ticker: força re-render a cada 30s para atualizar labels de tempo
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -114,9 +113,10 @@ export function Notifications() {
   }, []);
 
   // ─── Build notifications with distance ───
+  const hasLocation = userLocation != null;
   const allNotifications = useMemo<NotifItem[]>(() => {
-    const userLat = userLocation?.lat ?? -14.235;
-    const userLng = userLocation?.lng ?? -51.925;
+    const userLat = userLocation?.lat;
+    const userLng = userLocation?.lng;
 
     const alertNotifs: NotifItem[] = incidents
       .filter((i) => i.status === "active")
@@ -130,7 +130,10 @@ export function Notifications() {
         alertType: inc.type,
         read: readNotifIds.has(`notif-${inc.id}`),
         incidentId: inc.id,
-        distance: haversineDistance(userLat, userLng, inc.location.lat, inc.location.lng),
+        distance:
+          userLat != null && userLng != null
+            ? haversineDistance(userLat, userLng, inc.location.lat, inc.location.lng)
+            : Infinity,
         lat: inc.location.lat,
         lng: inc.location.lng,
       }));
@@ -138,9 +141,10 @@ export function Notifications() {
     const communityNotifs: NotifItem[] = communityNotifsBase.map((n) => ({
       ...n,
       read: readNotifIds.has(n.id),
-      distance: n.lat != null && n.lng != null
-        ? haversineDistance(userLat, userLng, n.lat, n.lng)
-        : 0,
+      distance:
+        userLat != null && userLng != null && n.lat != null && n.lng != null
+          ? haversineDistance(userLat, userLng, n.lat, n.lng)
+          : Infinity,
     }));
 
     const systemNotifs: NotifItem[] = systemNotifsBase.map((n) => ({
@@ -182,6 +186,13 @@ export function Notifications() {
   const markAllAsRead = () => markAllNotifsRead(filteredNotifications.map((n) => n.id));
 
   const clearAllNotifs = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      confirmClearTimer.current = setTimeout(() => setConfirmClear(false), 3000);
+      return;
+    }
+    if (confirmClearTimer.current) clearTimeout(confirmClearTimer.current);
+    setConfirmClear(false);
     dismissNotifs(filteredNotifications.map((n) => n.id));
   };
 
@@ -296,10 +307,16 @@ export function Notifications() {
               {filteredNotifications.length > 0 && (
                 <button
                   onClick={clearAllNotifs}
-                  className={`px-3 py-1.5 text-[11px] font-semibold rounded-full active:scale-95 transition font-['Poppins'] flex items-center gap-1 ${isDark ? "text-gray-400 bg-gray-700/50 hover:bg-gray-700" : "text-gray-500 bg-gray-100 hover:bg-gray-200"}`}
+                  className={`px-3 py-1.5 text-[11px] font-semibold rounded-full active:scale-95 transition font-['Poppins'] flex items-center gap-1 ${
+                    confirmClear
+                      ? "text-white bg-red-500 hover:bg-red-600"
+                      : isDark
+                      ? "text-gray-400 bg-gray-700/50 hover:bg-gray-700"
+                      : "text-gray-500 bg-gray-100 hover:bg-gray-200"
+                  }`}
                 >
                   <IconTrash className="w-3 h-3" />
-                  {t("alerts.clear", language)}
+                  {confirmClear ? t("general.confirm", language) : t("alerts.clear", language)}
                 </button>
               )}
             </div>
@@ -316,7 +333,7 @@ export function Notifications() {
                 onClick={() => setSelectedRadius(opt.value)}
                 className={`rounded-full text-[11px] font-semibold transition active:scale-95 whitespace-nowrap font-['Poppins'] ${ selectedRadius === opt.value ? chipActive : chipInactive } px-[17px] py-[4px]`}
               >
-                {opt.label}
+                {opt.value === Infinity ? t("alerts.all", language) : opt.label}
               </button>
             ))}
           </div>
@@ -348,10 +365,13 @@ export function Notifications() {
                 className={`${textSecondary} text-[13px] font-['Poppins'] text-center max-w-[260px]`}
               >
                 {t("alerts.noAlerts", language)}{" "}
-                {selectedRadius < 1000
+                {selectedRadius === Infinity
+                  ? t("alerts.all", language).toLowerCase()
+                  : selectedRadius < 1000
                   ? `${selectedRadius}m`
                   : `${selectedRadius / 1000} km`}
-                . {t("alerts.increaseRadius", language)}
+                .{" "}
+                {selectedRadius < Infinity && t("alerts.increaseRadius", language)}
               </p>
             </motion.div>
           ) : (
@@ -364,13 +384,16 @@ export function Notifications() {
                   key={notif.id}
                   layout
                   initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: notif.read ? 0.4 : 1, y: 0 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -40, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
                   transition={{ delay: idx * 0.03, opacity: { duration: 0.3 } }}
                   className={`relative w-full flex items-start gap-3 md:gap-4 border-b ${cardBorder}`}
                 >
                   <button
-                    onClick={() => markAsRead(notif.id)}
+                    onClick={() => {
+                      markAsRead(notif.id);
+                      if (notif.type === "alert") navigate("/");
+                    }}
                     className="flex-1 px-5 md:px-6 py-4 md:py-5 flex items-start gap-3 md:gap-4 text-left transition active:scale-[0.99] hover:bg-gray-50/50 dark:hover:bg-gray-800/30 min-w-0"
                   >
                   {/* Unread dot */}
@@ -414,7 +437,7 @@ export function Notifications() {
 
                     {/* Distance + Severity badges */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {isLocationBased && (
+                      {isLocationBased && hasLocation && notif.distance !== Infinity && (
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-['Poppins'] ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}
                         >

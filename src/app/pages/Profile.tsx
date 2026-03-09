@@ -24,11 +24,11 @@ import {
 
 } from "@tabler/icons-react";
 
-const getTrustLevelLabel = (level: number) => {
-  if (level >= 4) return { label: "Veterano", color: "from-purple-500 to-purple-600" };
-  if (level >= 3) return { label: "Confiavel", color: "from-blue-500 to-blue-600" };
-  if (level >= 2) return { label: "Ativo", color: "from-green-500 to-green-600" };
-  return { label: "Iniciante", color: "from-gray-500 to-gray-600" };
+const getTrustLevelLabel = (level: number, lang: string) => {
+  if (level >= 4) return { label: t("profile.trust.veteran", lang as any), color: "from-purple-500 to-purple-600" };
+  if (level >= 3) return { label: t("profile.trust.trusted", lang as any), color: "from-blue-500 to-blue-600" };
+  if (level >= 2) return { label: t("profile.trust.active", lang as any), color: "from-green-500 to-green-600" };
+  return { label: t("profile.trust.beginner", lang as any), color: "from-gray-500 to-gray-600" };
 };
 
 export function Profile() {
@@ -397,7 +397,7 @@ export function Profile() {
   //  ESTADO 1: Anônimo com perfil (anonymous)
   // ══════════════════════════════════════════════════════════
   if (authStatus === "anonymous") {
-    const trustLevel = getTrustLevelLabel(userProfile!.trustLevel);
+    const trustLevel = getTrustLevelLabel(userProfile!.trustLevel, language);
 
     return (
       <div className={`h-full w-full ${pageBg} overflow-y-auto`}>
@@ -501,7 +501,8 @@ export function Profile() {
                   onClick={() => {
                     setUserProfile(null);
                     setIsOnboarded(false);
-                    localStorage.removeItem("alertaplus_profile");
+                    ["alertaplus_profile", "alertaplus_achievements", "alertaplus_favorites",
+                      "alertaplus_dismissed_notifs", "alertaplus_read_notifs"].forEach(k => localStorage.removeItem(k));
                     navigate("/onboarding");
                   }}
                   className="w-full h-[49px] bg-orange-500 hover:bg-orange-600 rounded-[14px] text-white text-[14px] font-bold font-['Poppins'] active:scale-[0.97] transition mb-3"
@@ -525,7 +526,7 @@ export function Profile() {
   // ══════════════════════════════════════════════════════════
   //  ESTADO 2: Autenticado (authenticated)
   // ══════════════════════════════════════════════════════════
-  const trustLevel = getTrustLevelLabel(userProfile!.trustLevel);
+  const trustLevel = getTrustLevelLabel(userProfile!.trustLevel, language);
 
   return (
     <div className={`h-full w-full ${pageBg} overflow-y-auto`}>
@@ -614,9 +615,13 @@ export function Profile() {
           {/* Logout */}
           <button
             onClick={async () => {
+              const uid = userProfile?.id;
               await firebaseSignOut();
               setUserProfile(null);
               setIsOnboarded(false);
+              ["alertaplus_profile", "alertaplus_achievements", "alertaplus_favorites",
+                "alertaplus_dismissed_notifs", "alertaplus_read_notifs"].forEach(k => localStorage.removeItem(k));
+              if (uid) localStorage.removeItem(`alertaplus_profile_${uid}`);
               navigate("/onboarding");
             }}
             className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition border mt-3 ${isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}

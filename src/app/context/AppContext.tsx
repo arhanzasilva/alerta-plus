@@ -300,6 +300,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const authUidRef = useRef<string | null>(null);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const knownIncidentIdsRef = useRef<Set<string>>(new Set());
+  const incidentsInitializedRef = useRef(false); // true after first Firestore snapshot
 
   // Derive auth status from profile state
   // guest = no profile (skipped onboarding or not started)
@@ -650,30 +651,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsub = onSnapshot(collection(db, "incidents"), (snap) => {
       const data = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Incident));
 
-      // Notify user about new active incidents within 2 km
+      // Notify user about new active incidents within 2 km — batched into a single notification
+      // Skip the very first snapshot (initial load) — only notify on subsequent real-time updates
       if (
-        knownIncidentIdsRef.current.size > 0 &&
+        incidentsInitializedRef.current &&
         "Notification" in window &&
         Notification.permission === "granted"
       ) {
         const loc = userLocationRef.current;
         if (loc) {
+          const nearbyNew: Incident[] = [];
           data.forEach((inc) => {
             if (inc.status !== "active" || knownIncidentIdsRef.current.has(inc.id)) return;
             const dist = haversineDistance(loc.lat, loc.lng, inc.location.lat, inc.location.lng);
-            if (dist <= 2000) {
-              const label = INCIDENT_TYPE_LABELS[inc.type] ?? inc.type;
-              new Notification("⚠️ Alerta próximo a você", {
-                body: `${label} — ${inc.location.address}`,
-                icon: "/favicon.png",
-                badge: "/favicon.png",
-              });
-            }
+            if (dist <= 2000) nearbyNew.push(inc);
           });
+
+          if (nearbyNew.length === 1) {
+            const label = INCIDENT_TYPE_LABELS[nearbyNew[0].type] ?? nearbyNew[0].type;
+            new Notification("⚠️ Novo alerta próximo", {
+              body: `${label} — ${nearbyNew[0].location.address}`,
+              icon: "/favicon.png",
+              badge: "/favicon.png",
+            });
+          } else if (nearbyNew.length > 1) {
+            new Notification(`⚠️ ${nearbyNew.length} novos alertas na sua área`, {
+              body: nearbyNew.slice(0, 3).map((i) => INCIDENT_TYPE_LABELS[i.type] ?? i.type).join(", "),
+              icon: "/favicon.png",
+              badge: "/favicon.png",
+            });
+          }
         }
       }
 
       knownIncidentIdsRef.current = new Set(data.map((d) => d.id));
+      incidentsInitializedRef.current = true;
       setIncidents(data);
     });
     return unsub;

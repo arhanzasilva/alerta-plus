@@ -83,20 +83,6 @@ const getStepDirectionColor = (icon: string) => {
   }
 };
 
-const getStepDirectionLabel = (icon: string) => {
-  switch (icon) {
-    case "straight":
-      return "Siga em frente";
-    case "right":
-      return "Vire à direita";
-    case "left":
-      return "Vire à esquerda";
-    case "arrive":
-      return "Destino";
-    default:
-      return "";
-  }
-};
 
 // Parse distance string like "3.2 km" or "450m" to meters
 function parseDistanceToMeters(dist: string): number {
@@ -144,10 +130,11 @@ function formatDistance(meters: number): string {
 }
 
 // Calculate ETA
-function getETA(secondsRemaining: number): string {
+function getETA(secondsRemaining: number, language: string): string {
   const now = new Date();
   now.setSeconds(now.getSeconds() + secondsRemaining);
-  return now.toLocaleTimeString("pt-BR", {
+  const locale = language === "en" ? "en-US" : language === "es" ? "es-419" : "pt-BR";
+  return now.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -978,7 +965,7 @@ export function NavigationMode({
                 {t("navmode.eta", language)}
               </span>
               <span className={`text-[15px] ${isDark ? "text-white" : "text-[#101828]"} font-bold font-['Poppins']`}>
-                {getETA(remainingTimeSeconds)}
+                {getETA(remainingTimeSeconds, language)}
               </span>
             </div>
 

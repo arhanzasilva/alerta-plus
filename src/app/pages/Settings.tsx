@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { auth, googleProvider } from "../../config/firebase";
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, reauthenticateWithCredential, updatePassword, EmailAuthProvider } from "firebase/auth";
 import { useApp } from "../context/AppContext";
 import type { Language, DistanceUnit } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
@@ -93,16 +93,16 @@ export function Settings() {
   );
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showUnitModal, setShowUnitModal] = useState(false);
-  const [navPrefs, setNavPrefs] = useState({
-    avoidTolls: false,
-    avoidHighways: false,
-    preferSafe: true,
-    autoReroute: true,
+  const [navPrefs, setNavPrefs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("alertaplus_nav_prefs");
+      return saved ? JSON.parse(saved) : { avoidTolls: false, avoidHighways: false, preferSafe: true, autoReroute: true };
+    } catch { return { avoidTolls: false, avoidHighways: false, preferSafe: true, autoReroute: true }; }
   });
   const [vehicleType, setVehicleType] = useState(
     userProfile?.transportMode === "car" ? "car" : userProfile?.transportMode === "motorcycle" ? "motorcycle" : "walking"
   );
-  const [fuelType, setFuelType] = useState("gasoline");
+  const [fuelType, setFuelType] = useState(() => localStorage.getItem("alertaplus_fuel_type") || "gasoline");
   const [expandedDropdown, setExpandedDropdown] = useState<"vehicle" | "fuel" | null>(null);
   const [mapVoice, setMapVoice] = useState("female-default");
   const [voiceVolume, setVoiceVolume] = useState(80);
@@ -134,10 +134,13 @@ export function Settings() {
   const [isShareLocation, setIsShareLocation] = useState(true);
 
   // Edit modal state for account fields
-  const [editField, setEditField] = useState<"name" | "email" | "neighborhood" | null>(null);
+  const [editField, setEditField] = useState<"name" | "email" | "neighborhood" | "password" | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editValue2, setEditValue2] = useState(""); // for confirm password
   const [editOldPassword, setEditOldPassword] = useState("");
+  const [showEditOldPassword, setShowEditOldPassword] = useState(false);
+  const [showEditNewPassword, setShowEditNewPassword] = useState(false);
+  const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false);
   const [editError, setEditError] = useState("");
 
   const bgClass = tc.bgPage2;
@@ -482,7 +485,7 @@ export function Settings() {
         iconBg: "bg-green-500",
         toggle: true,
         toggleValue: navPrefs.preferSafe,
-        onToggle: () => setNavPrefs(p => ({ ...p, preferSafe: !p.preferSafe })),
+        onToggle: () => setNavPrefs(p => { const n = { ...p, preferSafe: !p.preferSafe }; localStorage.setItem("alertaplus_nav_prefs", JSON.stringify(n)); return n; }),
       },
       {
         icon: IconCompass,
@@ -490,7 +493,7 @@ export function Settings() {
         iconBg: "bg-blue-500",
         toggle: true,
         toggleValue: navPrefs.autoReroute,
-        onToggle: () => setNavPrefs(p => ({ ...p, autoReroute: !p.autoReroute })),
+        onToggle: () => setNavPrefs(p => { const n = { ...p, autoReroute: !p.autoReroute }; localStorage.setItem("alertaplus_nav_prefs", JSON.stringify(n)); return n; }),
       },
       {
         icon: IconDiamond,
@@ -498,7 +501,7 @@ export function Settings() {
         iconBg: "bg-amber-500",
         toggle: true,
         toggleValue: navPrefs.avoidTolls,
-        onToggle: () => setNavPrefs(p => ({ ...p, avoidTolls: !p.avoidTolls })),
+        onToggle: () => setNavPrefs(p => { const n = { ...p, avoidTolls: !p.avoidTolls }; localStorage.setItem("alertaplus_nav_prefs", JSON.stringify(n)); return n; }),
       },
     ]);
   }
@@ -575,6 +578,8 @@ export function Settings() {
                           onClick={() => {
                             setVehicleType(option.value);
                             setExpandedDropdown(null);
+                            const mode = option.value === "car" ? "car" : option.value === "motorcycle" ? "motorcycle" : "pedestrian";
+                            updateUserProfile({ transportMode: mode as "car" | "motorcycle" | "pedestrian" });
                             toast.success(`Veículo: ${option.label}`);
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
@@ -636,6 +641,7 @@ export function Settings() {
                           type="button"
                           onClick={() => {
                             setFuelType(option.value);
+                            localStorage.setItem("alertaplus_fuel_type", option.value);
                             setExpandedDropdown(null);
                             toast.success(`Combustível: ${option.label}`);
                           }}
@@ -787,16 +793,20 @@ export function Settings() {
       }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+      try { await auth.signOut(); } catch { /* ignore */ }
       setLoginEmail(""); setLoginPassword(""); setLoginError(""); setAccountView("login");
+      const uid = userProfile?.id;
       setUserProfile(null);
       setIsOnboarded(false);
-      localStorage.removeItem("alertaplus_profile");
+      ["alertaplus_profile", "alertaplus_achievements", "alertaplus_favorites",
+        "alertaplus_dismissed_notifs", "alertaplus_read_notifs"].forEach(k => localStorage.removeItem(k));
+      if (uid) localStorage.removeItem(`alertaplus_profile_${uid}`);
       toast(t("profile.logout", language));
     };
 
     // Handle saving edited field
-    const handleSaveEdit = () => {
+    const handleSaveEdit = async () => {
       setEditError("");
       if (editField === "name") {
         if (!editValue.trim()) { setEditError("Digite seu nome"); return; }
@@ -814,17 +824,46 @@ export function Settings() {
         updateUserProfile({ neighborhood: editValue.trim() });
         toast.success("Bairro atualizado!");
         setEditField(null);
+      } else if (editField === "password") {
+        if (!editOldPassword) { setEditError("Digite sua senha atual"); return; }
+        if (!editValue) { setEditError("Digite a nova senha"); return; }
+        if (editValue.length < 6) { setEditError("A nova senha deve ter pelo menos 6 caracteres"); return; }
+        if (editValue !== editValue2) { setEditError("As senhas não coincidem"); return; }
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || !firebaseUser.email) { setEditError("Erro ao identificar usuário"); return; }
+        try {
+          const credential = EmailAuthProvider.credential(firebaseUser.email, editOldPassword);
+          await reauthenticateWithCredential(firebaseUser, credential);
+          await updatePassword(firebaseUser, editValue);
+          toast.success("Senha alterada com sucesso!");
+          setEditField(null);
+        } catch (err: unknown) {
+          const code = (err as { code?: string }).code;
+          if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+            setEditError("Senha atual incorreta");
+          } else if (code === "auth/weak-password") {
+            setEditError("A nova senha é muito fraca");
+          } else if (code === "auth/too-many-requests") {
+            setEditError("Muitas tentativas. Tente mais tarde");
+          } else {
+            setEditError("Erro ao trocar senha. Tente novamente");
+          }
+          return;
+        }
       }
       setEditValue("");
       setEditValue2("");
       setEditOldPassword("");
     };
 
-    const openEditField = (field: "name" | "email" | "neighborhood") => {
+    const openEditField = (field: "name" | "email" | "neighborhood" | "password") => {
       setEditError("");
       setEditValue(field === "name" ? (userProfile?.name || "") : field === "email" ? (userProfile?.email || "") : field === "neighborhood" ? (userProfile?.neighborhood || "") : "");
       setEditValue2("");
       setEditOldPassword("");
+      setShowEditOldPassword(false);
+      setShowEditNewPassword(false);
+      setShowEditConfirmPassword(false);
       setEditField(field);
     };
 
@@ -849,7 +888,7 @@ export function Settings() {
     const strengthLabels = ["", "Muito fraca", "Fraca", "Boa", "Forte"];
     const strengthColors = ["", "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-[#00bc7d]"];
 
-    const editFieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro" };
+    const editFieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro", password: "Trocar senha" };
     const editFieldPlaceholders: Record<string, string> = { name: "Seu nome completo", email: "seu@email.com", neighborhood: "Ex: Cidade Nova, Flores..." };
 
     // Derive logged-in state from both local flag and global profile
@@ -890,7 +929,8 @@ export function Settings() {
             <div className={`${cardBg}`}>
               {renderSettingRow({ icon: IconUserCircle, label: "Nome", iconBg: "bg-blue-500", subtitle: userProfile?.name || "Toque para definir", action: () => openEditField("name") }, 0, false)}
               {renderSettingRow({ icon: IconAt, label: "E-mail", iconBg: "bg-indigo-500", subtitle: effectiveEmail || "Toque para definir", action: () => openEditField("email") }, 1, false)}
-              {renderSettingRow({ icon: IconMapPin, label: "Bairro", iconBg: "bg-[#00bc7d]", subtitle: userProfile?.neighborhood || "Toque para definir", action: () => openEditField("neighborhood") }, 2, true)}
+              {renderSettingRow({ icon: IconMapPin, label: "Bairro", iconBg: "bg-[#00bc7d]", subtitle: userProfile?.neighborhood || "Toque para definir", action: () => openEditField("neighborhood") }, 2, effectiveMethod !== "email")}
+              {effectiveMethod === "email" && renderSettingRow({ icon: IconKey, label: "Trocar senha", iconBg: "bg-orange-500", subtitle: "••••••••", action: () => openEditField("password") }, 3, true)}
             </div>
             <div className="px-5 pt-5">
               <button type="button" onClick={handleLogout} className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl border font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition ${isDark ? "border-red-500/30 text-red-400 active:bg-red-500/10" : "border-red-200 text-red-500 active:bg-red-50"}`}>
@@ -922,30 +962,74 @@ export function Settings() {
                   <div className="w-10 h-1.5 bg-[#d1d5dc] rounded-full mx-auto mb-5" />
                   <h3 className={`${textPrimary} text-[18px] font-bold font-['Poppins'] mb-4`}>{editFieldLabels[editField]}</h3>
 
-                  <div className="mb-3">
-                    <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>
-                      {editFieldLabels[editField]}
-                    </label>
-                    <div className="relative">
-                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                        {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
-                        {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
-                        {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
+                  {editField === "password" ? (
+                    <div className="space-y-3">
+                      {/* Old password */}
+                      <div>
+                        <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Senha atual</label>
+                        <div className="relative">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                          <input type={showEditOldPassword ? "text" : "password"} placeholder="Sua senha atual" value={editOldPassword} onChange={(e) => { setEditOldPassword(e.target.value); setEditError(""); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} autoFocus />
+                          <button type="button" onClick={() => setShowEditOldPassword(!showEditOldPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
+                            {showEditOldPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        type={editField === "email" ? "email" : "text"}
-                        placeholder={editFieldPlaceholders[editField]}
-                        value={editValue}
-                        onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
-                        className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`}
-                        autoFocus
-                      />
+                      {/* New password */}
+                      <div>
+                        <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Nova senha</label>
+                        <div className="relative">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                          <input type={showEditNewPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" value={editValue} onChange={(e) => { setEditValue(e.target.value); setEditError(""); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
+                          <button type="button" onClick={() => setShowEditNewPassword(!showEditNewPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
+                            {showEditNewPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                          </button>
+                        </div>
+                        {editValue.length > 0 && (
+                          <div className="flex gap-1 mt-1.5">
+                            {[1,2,3,4].map(i => <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= getPasswordStrength(editValue) ? strengthColors[getPasswordStrength(editValue)] : (isDark ? "bg-white/10" : "bg-gray-200")}`} />)}
+                            <span className={`text-[11px] font-['Poppins'] ml-1 ${isDark ? "text-white/40" : "text-gray-400"}`}>{strengthLabels[getPasswordStrength(editValue)]}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Confirm new password */}
+                      <div>
+                        <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>Confirmar nova senha</label>
+                        <div className="relative">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><IconKey className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /></div>
+                          <input type={showEditConfirmPassword ? "text" : "password"} placeholder="Repita a nova senha" value={editValue2} onChange={(e) => { setEditValue2(e.target.value); setEditError(""); }} onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); }} className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`} />
+                          <button type="button" onClick={() => setShowEditConfirmPassword(!showEditConfirmPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1">
+                            {showEditConfirmPassword ? <IconEyeOff className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} /> : <IconEye className={`w-[18px] h-[18px] ${isDark ? "text-white/30" : "text-gray-400"}`} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mb-3">
+                      <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>
+                        {editFieldLabels[editField]}
+                      </label>
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                          {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
+                          {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
+                          {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
+                        </div>
+                        <input
+                          type={editField === "email" ? "email" : "text"}
+                          placeholder={editFieldPlaceholders[editField]}
+                          value={editValue}
+                          onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
+                          className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <AnimatePresence>
                     {editError && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3 mt-3">
                         <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${isDark ? "bg-red-500/10 border-red-500/20" : "bg-red-50 border-red-200"}`}>
                           <IconAlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
                           <span className={`text-[12px] font-medium font-['Poppins'] ${isDark ? "text-red-400" : "text-red-500"}`}>{editError}</span>
