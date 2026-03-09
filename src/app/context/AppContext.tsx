@@ -52,6 +52,7 @@ export interface Incident {
   location: { lat: number; lng: number; address: string };
   timestamp: number;
   reportedBy?: string;
+  uid?: string;
   official?: boolean;
   permanent?: boolean;
   officialSource?: string;
@@ -133,8 +134,11 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: IconDropletFilled,
     gradient: "from-blue-500 to-cyan-600",
     category: "reports",
-    condition: (p) => p.reportsCount >= 5,
-    progress: (p) => ({ current: Math.min(p.reportsCount, 5), target: 5 }),
+    condition: (p, incs) => incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "flood").length >= 5,
+    progress: (p, incs) => {
+      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "flood").length;
+      return { current: Math.min(count, 5), target: 5 };
+    },
   },
   {
     id: "accessibility-ally",
@@ -143,8 +147,11 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: IconAccessibleFilled,
     gradient: "from-purple-500 to-purple-700",
     category: "reports",
-    condition: (p) => p.reportsCount >= 3,
-    progress: (p) => ({ current: Math.min(p.reportsCount, 3), target: 3 }),
+    condition: (p, incs) => incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "accessibility").length >= 3,
+    progress: (p, incs) => {
+      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "accessibility").length;
+      return { current: Math.min(count, 3), target: 3 };
+    },
   },
   {
     id: "safety-guardian",
@@ -153,9 +160,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: IconShieldFilled,
     gradient: "from-red-500 to-red-700",
     category: "safety",
-    condition: (p, incs) => incs.some((i) => i.reportedBy === p.name && ["crime", "danger-zone", "assault", "theft"].includes(i.type)),
+    condition: (p, incs) => incs.some((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && ["crime", "danger-zone", "assault", "theft"].includes(i.type)),
     progress: (p, incs) => {
-      const count = incs.filter((i) => i.reportedBy === p.name && ["crime", "danger-zone", "assault", "theft"].includes(i.type)).length;
+      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && ["crime", "danger-zone", "assault", "theft"].includes(i.type)).length;
       return { current: Math.min(count, 1), target: 1 };
     },
   },
@@ -176,9 +183,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: IconMoonFilled,
     gradient: "from-indigo-500 to-indigo-800",
     category: "safety",
-    condition: (p, incs) => incs.some((i) => i.reportedBy === p.name && i.type === "no-light"),
+    condition: (p, incs) => incs.some((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "no-light"),
     progress: (p, incs) => {
-      const count = incs.filter((i) => i.reportedBy === p.name && i.type === "no-light").length;
+      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "no-light").length;
       return { current: Math.min(count, 1), target: 1 };
     },
   },
@@ -804,6 +811,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addIncident = useCallback((incident: Omit<Incident, "id" | "timestamp" | "confirmations" | "denials" | "status">) => {
     const raw = {
       ...incident,
+      uid: authUidRef.current ?? undefined,
       timestamp: Date.now(),
       confirmations: 1,
       denials: 0,
