@@ -328,6 +328,55 @@ export function MapView() {
     [selectedIncidentId, incidents]
   );
 
+  // Toast de resumo de proximidade — dispara uma vez por sessão ao abrir o mapa
+  const proximityToastSentRef = useRef(false);
+  useEffect(() => {
+    if (proximityToastSentRef.current) return;
+    if (!userLocation || visibleIncidents.length === 0) return;
+    proximityToastSentRef.current = true;
+
+    const RADIUS = 1000; // 1 km
+    const nearby = visibleIncidents.filter(
+      (inc) =>
+        inc.status === "active" &&
+        haversineDistance(userLocation.lat, userLocation.lng, inc.location.lat, inc.location.lng) <= RADIUS
+    );
+
+    if (nearby.length > 0) {
+      const count = nearby.length;
+      toast.warning(
+        count === 1
+          ? "1 alerta próximo a você"
+          : `${count} alertas próximos a você`,
+        {
+          description: "Num raio de 1 km da sua localização",
+          duration: 5000,
+          icon: "⚠️",
+        }
+      );
+    }
+  }, [userLocation, visibleIncidents]);
+
+  // Reverse geocoding cache: incidentId -> resolved address string
+  const geocacheRef = useRef<Map<string, string>>(new Map());
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedIncident) { setResolvedAddress(null); return; }
+    const { id, location } = selectedIncident;
+    if (geocacheRef.current.has(id)) {
+      setResolvedAddress(geocacheRef.current.get(id)!);
+      return;
+    }
+    setResolvedAddress(null);
+    mapboxService.reverseGeocode(location.lng, location.lat, language as 'pt' | 'en' | 'es')
+      .then((addr) => {
+        geocacheRef.current.set(id, addr);
+        setResolvedAddress(addr);
+      })
+      .catch(() => {});
+  }, [selectedIncident?.id]);
+
   // Initialize Mapbox map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -579,7 +628,8 @@ export function MapView() {
 
   const handleShareAlert = (inc: Incident) => {
     const typeLabel = getAlertInfo(inc.type)?.label ?? inc.type;
-    const text = `🚨 ${typeLabel} em ${inc.location.address}. Veja no Alerta+`;
+    const displayAddr = geocacheRef.current.get(inc.id) ?? inc.location.address;
+    const text = `🚨 ${typeLabel} em ${displayAddr}. Veja no Alerta+`;
     const url = 'https://alerta-plus.vercel.app';
     if (navigator.share) {
       navigator.share({ title: 'Alerta+', text, url }).catch(() => {});
@@ -1627,7 +1677,7 @@ export function MapView() {
                   <div className="flex items-start gap-2">
                     <IconMapPin size={15} className={`${sheetTextMuted} mt-0.5 flex-shrink-0`} />
                     <p className={`${sheetTextSec} text-[13px] font-['Poppins'] leading-snug`}>
-                      {inc.location.address}
+                      {resolvedAddress ?? inc.location.address}
                     </p>
                   </div>
 
