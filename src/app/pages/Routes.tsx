@@ -67,7 +67,7 @@ interface RouteData {
   geometry?: GeoJSON.LineString; // Route line coordinates from Mapbox
 }
 
-const MANAUS_CENTER = { lat: -3.0356, lng: -60.0222 };
+const BRAZIL_CENTER = { lat: -14.235, lng: -51.925 };
 
 const DAYS_OF_WEEK = [
   { key: "seg", label: "S" },
@@ -290,7 +290,7 @@ export function Routes() {
       try {
         const results = await mapboxService.getAddressSuggestions(
           origin,
-          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          userLocation ? [userLocation.lng, userLocation.lat] : [-51.925, -14.235],
           { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setOriginSuggestions(results);
@@ -314,7 +314,7 @@ export function Routes() {
       try {
         const results = await mapboxService.getAddressSuggestions(
           formOrigin,
-          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          userLocation ? [userLocation.lng, userLocation.lat] : [-51.925, -14.235],
           { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setFormOriginSugg(results);
@@ -338,7 +338,7 @@ export function Routes() {
       try {
         const results = await mapboxService.getAddressSuggestions(
           formDestination,
-          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          userLocation ? [userLocation.lng, userLocation.lat] : [-51.925, -14.235],
           { limit: 4, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setFormDestSugg(results);
@@ -362,7 +362,7 @@ export function Routes() {
       try {
         const results = await mapboxService.getAddressSuggestions(
           destination,
-          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          userLocation ? [userLocation.lng, userLocation.lat] : [-51.925, -14.235],
           { limit: 5, language: language as 'pt' | 'en' | 'es', types: ['address', 'street', 'place', 'neighborhood'] }
         );
         setDestSuggestions(results);
@@ -393,7 +393,7 @@ export function Routes() {
       if (!originLngLat) {
         const originResults = await mapboxService.getAddressSuggestions(
           originText,
-          [MANAUS_CENTER.lng, MANAUS_CENTER.lat],
+          [BRAZIL_CENTER.lng, BRAZIL_CENTER.lat],
           { limit: 1, language: language as 'pt' | 'en' | 'es' }
         );
         if (originResults.length === 0) {
@@ -676,7 +676,7 @@ export function Routes() {
       mapInstanceRef.current = new mapboxgl.Map({
         container: mapContainerRef.current,
         style: isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
-        center: [MANAUS_CENTER.lng, MANAUS_CENTER.lat],
+        center: [BRAZIL_CENTER.lng, BRAZIL_CENTER.lat],
         zoom: 12,
         attributionControl: false,
       });
@@ -854,7 +854,7 @@ export function Routes() {
           setSelectedRouteIdx(null);
           navigate("/map");
         }}
-        mapCenter={MANAUS_CENTER}
+        mapCenter={BRAZIL_CENTER}
       />
     );
   }

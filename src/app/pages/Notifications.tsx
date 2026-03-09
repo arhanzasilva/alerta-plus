@@ -115,8 +115,8 @@ export function Notifications() {
 
   // ─── Build notifications with distance ───
   const allNotifications = useMemo<NotifItem[]>(() => {
-    const userLat = userLocation?.lat ?? -3.119;
-    const userLng = userLocation?.lng ?? -60.0217;
+    const userLat = userLocation?.lat ?? -14.235;
+    const userLng = userLocation?.lng ?? -51.925;
 
     const alertNotifs: NotifItem[] = incidents
       .filter((i) => i.status === "active")

@@ -57,8 +57,8 @@ export function ReportIncident() {
       type: selectedType as "flood" | "obstacle" | "accessibility" | "construction" | "no-light" | "crime" | "danger-zone" | "theft" | "assault",
       severity: selectedSeverity,
       location: {
-        lat: userLocation?.lat ?? -3.1190275,
-        lng: userLocation?.lng ?? -60.0217314,
+        lat: userLocation?.lat ?? -14.235,
+        lng: userLocation?.lng ?? -51.925,
         address: t("mapview.nearYourLocation", language),
       },
       description: description || undefined,

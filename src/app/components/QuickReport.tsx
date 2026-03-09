@@ -147,7 +147,7 @@ const SEVERITY_OPTIONS = [
 ];
 
 export function QuickReport({ isOpen, onClose }: QuickReportProps) {
-  const { addIncident, userProfile, theme } = useApp();
+  const { addIncident, userProfile, theme, userLocation } = useApp();
   const isDark = theme === "dark";
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedItem, setSelectedItem] = useState<ReportItem | null>(null);
@@ -170,8 +170,8 @@ export function QuickReport({ isOpen, onClose }: QuickReportProps) {
       type: selectedItem.type as any,
       severity: severity,
       location: {
-        lat: -3.0356 + (Math.random() - 0.5) * 0.01,
-        lng: -60.0222 + (Math.random() - 0.5) * 0.01,
+        lat: (userLocation?.lat ?? -14.235) + (Math.random() - 0.5) * 0.01,
+        lng: (userLocation?.lng ?? -51.925) + (Math.random() - 0.5) * 0.01,
         address: "Próximo à sua localização",
       },
       description: description || `${selectedItem.label} reportado`,
