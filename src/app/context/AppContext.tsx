@@ -301,7 +301,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const knownIncidentIdsRef = useRef<Set<string>>(new Set());
   const incidentsInitializedRef = useRef(false); // true after first Firestore snapshot
-  const onLoadNotifSentRef = useRef(false); // true after on-load proximity notif is sent
 
   // Derive auth status from profile state
   // guest = no profile (skipped onboarding or not started)
@@ -691,37 +690,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return unsub;
   }, []);
-
-  // Notificação de boas-vindas: dispara uma vez por sessão (cooldown 1h)
-  // quando tanto a localização quanto os incidentes já estiverem carregados
-  useEffect(() => {
-    if (onLoadNotifSentRef.current) return;
-    if (!userLocation || incidents.length === 0) return;
-    onLoadNotifSentRef.current = true;
-
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
-
-    const COOLDOWN = 60 * 60 * 1000; // 1 hora
-    const lastKey = "alertaplus_last_proximity_notif";
-    const last = parseInt(localStorage.getItem(lastKey) || "0");
-    if (Date.now() - last <= COOLDOWN) return;
-
-    const nearby = incidents.filter(
-      (inc) =>
-        inc.status === "active" &&
-        haversineDistance(userLocation.lat, userLocation.lng, inc.location.lat, inc.location.lng) <= 2000
-    );
-
-    if (nearby.length > 0) {
-      const count = nearby.length;
-      new Notification(`⚠️ ${count} alerta${count > 1 ? "s" : ""} próximo${count > 1 ? "s" : ""} a você`, {
-        body: nearby.slice(0, 3).map((i) => INCIDENT_TYPE_LABELS[i.type] ?? i.type).join(", "),
-        icon: "/favicon.png",
-        badge: "/favicon.png",
-      });
-      localStorage.setItem(lastKey, Date.now().toString());
-    }
-  }, [userLocation, incidents]);
 
   // Auto-expiração (atualiza Firestore — idempotente entre clientes)
   useEffect(() => {
