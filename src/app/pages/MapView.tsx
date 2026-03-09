@@ -329,11 +329,14 @@ export function MapView() {
   );
 
   // Toast de resumo de proximidade — dispara uma vez por sessão ao abrir o mapa
+  // sessionStorage persiste no reload mas limpa ao fechar a aba
   const proximityToastSentRef = useRef(false);
   useEffect(() => {
     if (proximityToastSentRef.current) return;
+    if (sessionStorage.getItem("alertaplus_proximity_toast")) return;
     if (!userLocation || visibleIncidents.length === 0) return;
     proximityToastSentRef.current = true;
+    sessionStorage.setItem("alertaplus_proximity_toast", "1");
 
     const RADIUS = 1000; // 1 km
     const nearby = visibleIncidents.filter(
