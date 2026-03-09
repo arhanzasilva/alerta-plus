@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { auth, googleProvider } from "../../config/firebase";
 import { signInWithPopup } from "firebase/auth";
 import { useApp } from "../context/AppContext";
@@ -88,7 +88,10 @@ export function Settings() {
   const navigate = useNavigate();
   const { toggleTheme, theme, language, setLanguage, distanceUnit, setDistanceUnit, userProfile, setUserProfile, updateUserProfile, mapLayers, toggleMapLayer, notificationSettings, updateNotificationSettings, setIsOnboarded } = useApp();
   const tc = useThemeClasses(theme);
-  const [currentView, setCurrentView] = useState<SettingsView>("main");
+  const location = useLocation();
+  const [currentView, setCurrentView] = useState<SettingsView>(
+    (location.state as any)?.openAccount ? "account" : "main"
+  );
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [navPrefs, setNavPrefs] = useState({
