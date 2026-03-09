@@ -10,21 +10,13 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   IconFlagFilled,
-  IconDropletFilled,
-  IconAccessibleFilled,
-  IconShieldFilled,
   IconHomeFilled,
-  IconMoonFilled,
   IconCircleCheckFilled,
   IconEyeFilled,
   IconBoltFilled,
   IconStarFilled,
   IconTrophyFilled,
-  IconMoodHappyFilled,
-  IconRosetteDiscountCheckFilled,
-  IconCrownFilled,
   IconMapPinFilled,
-  IconAwardFilled,
 } from "@tabler/icons-react";
 
 export interface UserProfile {
@@ -128,76 +120,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     progress: (p) => ({ current: Math.min(p.reportsCount, 1), target: 1 }),
   },
   {
-    id: "rain-guardian",
-    name: "Guardiao da Chuva",
-    description: "Reportou 5+ alagamentos",
-    icon: IconDropletFilled,
-    gradient: "from-blue-500 to-cyan-600",
-    category: "reports",
-    condition: (p, incs) => incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "flood").length >= 5,
-    progress: (p, incs) => {
-      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "flood").length;
-      return { current: Math.min(count, 5), target: 5 };
-    },
-  },
-  {
-    id: "accessibility-ally",
-    name: "Aliado da Acessibilidade",
-    description: "3+ alertas de acessibilidade",
-    icon: IconAccessibleFilled,
-    gradient: "from-purple-500 to-purple-700",
-    category: "reports",
-    condition: (p, incs) => incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "accessibility").length >= 3,
-    progress: (p, incs) => {
-      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "accessibility").length;
-      return { current: Math.min(count, 3), target: 3 };
-    },
-  },
-  {
-    id: "safety-guardian",
-    name: "Guardiao da Seguranca",
-    description: "Reportou zonas de risco",
-    icon: IconShieldFilled,
-    gradient: "from-red-500 to-red-700",
-    category: "safety",
-    condition: (p, incs) => incs.some((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && ["crime", "danger-zone", "assault", "theft"].includes(i.type)),
-    progress: (p, incs) => {
-      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && ["crime", "danger-zone", "assault", "theft"].includes(i.type)).length;
-      return { current: Math.min(count, 1), target: 1 };
-    },
-  },
-  {
     id: "neighborhood-protector",
     name: "Protetor do Bairro",
-    description: "10+ contribuicoes",
+    description: "10+ reportes na comunidade",
     icon: IconHomeFilled,
     gradient: "from-green-500 to-green-700",
-    category: "community",
+    category: "reports",
     condition: (p) => p.reportsCount >= 10,
     progress: (p) => ({ current: Math.min(p.reportsCount, 10), target: 10 }),
-  },
-  {
-    id: "night-sentinel",
-    name: "Sentinela Noturno",
-    description: "Reportou falta de iluminacao",
-    icon: IconMoonFilled,
-    gradient: "from-indigo-500 to-indigo-800",
-    category: "safety",
-    condition: (p, incs) => incs.some((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "no-light"),
-    progress: (p, incs) => {
-      const count = incs.filter((i) => !i.official && (i.uid === p.id || (p.name && i.reportedBy === p.name)) && i.type === "no-light").length;
-      return { current: Math.min(count, 1), target: 1 };
-    },
-  },
-  {
-    id: "validator",
-    name: "Validador",
-    description: "Confirmou 10+ alertas",
-    icon: IconCircleCheckFilled,
-    gradient: "from-emerald-500 to-emerald-700",
-    category: "community",
-    condition: (p) => p.confirmationsGiven >= 10,
-    progress: (p) => ({ current: Math.min(p.confirmationsGiven, 10), target: 10 }),
   },
   {
     id: "first-validator",
@@ -208,6 +138,16 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     category: "community",
     condition: (p) => p.confirmationsGiven >= 1,
     progress: (p) => ({ current: Math.min(p.confirmationsGiven, 1), target: 1 }),
+  },
+  {
+    id: "validator",
+    name: "Validador",
+    description: "Confirmou 10+ alertas",
+    icon: IconCircleCheckFilled,
+    gradient: "from-emerald-500 to-emerald-700",
+    category: "community",
+    condition: (p) => p.confirmationsGiven >= 10,
+    progress: (p) => ({ current: Math.min(p.confirmationsGiven, 10), target: 10 }),
   },
   {
     id: "score-100",
@@ -238,46 +178,6 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     category: "milestone",
     condition: (p) => p.points >= 1000,
     progress: (p) => ({ current: Math.min(p.points, 1000), target: 1000 }),
-  },
-  {
-    id: "helper",
-    name: "Mao Amiga",
-    description: "Ajudou 10+ pessoas",
-    icon: IconMoodHappyFilled,
-    gradient: "from-pink-500 to-pink-700",
-    category: "community",
-    condition: (p) => p.impactCount >= 10,
-    progress: (p) => ({ current: Math.min(p.impactCount, 10), target: 10 }),
-  },
-  {
-    id: "big-helper",
-    name: "Anjo da Guarda",
-    description: "Ajudou 50+ pessoas",
-    icon: IconRosetteDiscountCheckFilled,
-    gradient: "from-sky-400 to-blue-600",
-    category: "community",
-    condition: (p) => p.impactCount >= 50,
-    progress: (p) => ({ current: Math.min(p.impactCount, 50), target: 50 }),
-  },
-  {
-    id: "veteran",
-    name: "Veterano",
-    description: "Nivel de confianca 3+",
-    icon: IconAwardFilled,
-    gradient: "from-violet-500 to-violet-700",
-    category: "milestone",
-    condition: (p) => p.trustLevel >= 3,
-    progress: (p) => ({ current: Math.min(p.trustLevel, 3), target: 3 }),
-  },
-  {
-    id: "master",
-    name: "Mestre Alerta",
-    description: "Nivel de confianca maximo",
-    icon: IconCrownFilled,
-    gradient: "from-yellow-500 to-amber-600",
-    category: "milestone",
-    condition: (p) => p.trustLevel >= 5,
-    progress: (p) => ({ current: Math.min(p.trustLevel, 5), target: 5 }),
   },
   {
     id: "route-planner",

@@ -277,11 +277,10 @@ export function Profile() {
     const totalCount = achievementsWithProgress.length;
 
     const categories = [
-      { key: "milestone", label: t("profile.milestones", language) },
       { key: "reports", label: t("profile.reports", language) },
       { key: "community", label: t("profile.community", language) },
+      { key: "milestone", label: t("profile.milestones", language) },
       { key: "explorer", label: t("profile.explorer", language) },
-      { key: "safety", label: t("profile.safety", language) },
     ];
 
     return (
