@@ -591,7 +591,6 @@ export function Onboarding() {
       trustLevel: 1,
       badges: [],
       reportsCount: 0,
-      impactCount: 0,
       confirmationsGiven: 0,
       denialsGiven: 0,
       routesSearched: 0,

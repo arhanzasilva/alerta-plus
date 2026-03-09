@@ -15,7 +15,6 @@ import {
   IconUserPlus,
   IconAward,
   IconMail,
-  IconTrendingUp,
   IconLock,
   IconLogout,
   IconCloudUpload,
@@ -219,7 +218,7 @@ export function Profile() {
 
   // ─── Stats Grid (shared between anonymous & authenticated) ───
   const StatsGrid = () => (
-    <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-3 md:gap-4">
+    <div className="grid grid-cols-2 gap-3 md:gap-4">
       <div className={`rounded-2xl p-4 text-center border ${isDark ? "bg-gray-800 border-gray-700" : "bg-[#F8F9FA] border-gray-100"}`}>
         <div className={`text-3xl font-bold mb-1 ${headerText}`}>
           {userProfile!.points}
@@ -234,36 +233,9 @@ export function Profile() {
           {t("profile.reports", language)}
         </div>
       </div>
-      <div className={`rounded-2xl p-4 text-center border ${isDark ? "bg-gray-800 border-gray-700" : "bg-[#F8F9FA] border-gray-100"}`}>
-        <div className={`text-3xl font-bold mb-1 ${headerText}`}>
-          {userProfile!.impactCount}
-        </div>
-        <div className={`text-xs ${subtextClass} font-medium`}>
-          {t("profile.impact", language)}
-        </div>
-      </div>
     </div>
   );
 
-  // ─── Impact Card ───
-  const ImpactCard = () => (
-    <div className={`p-5 rounded-2xl mb-6 border ${isDark ? "bg-green-500/10 border-green-500/30" : "bg-green-50 border-green-200"}`}>
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-          <IconTrendingUp className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <div className={`text-sm ${subtextClass} mb-1`}>
-            {t("profile.impactThisMonth", language)}
-          </div>
-          <div className={`${headerText} font-bold text-[16px]`}>
-            {t("profile.youHelped", language)} {userProfile!.impactCount}{" "}
-            {userProfile!.impactCount === 1 ? t("profile.person", language) : t("profile.people", language)}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   // ─── Achievements Section ───
   const AchievementsSection = () => {
@@ -473,9 +445,6 @@ export function Profile() {
             <LoginCard compact />
           </div>
 
-          {/* Impact Card */}
-          <ImpactCard />
-
           {/* Achievements */}
           <AchievementsSection />
 
@@ -618,9 +587,6 @@ export function Profile() {
 
           <StatsGrid />
         </motion.div>
-
-        {/* Impact Card */}
-        <ImpactCard />
 
         {/* Achievements */}
         <AchievementsSection />

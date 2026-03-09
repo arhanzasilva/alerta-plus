@@ -31,7 +31,6 @@ export interface UserProfile {
   trustLevel: number;
   badges: string[];
   reportsCount: number;
-  impactCount: number;
   confirmationsGiven: number;
   denialsGiven: number;
   routesSearched: number;
@@ -366,7 +365,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           trustLevel: 1,
           badges: [],
           reportsCount: 0,
-          impactCount: 0,
           confirmationsGiven: 0,
           denialsGiven: 0,
           routesSearched: 0,
@@ -723,7 +721,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     addDoc(collection(db, "incidents"), newIncident).catch(console.error);
 
-    const impactDelta = Math.floor(Math.random() * 5) + 1;
     setUserProfileState((prev) => {
       if (!prev) return prev;
       const pointsMap = { low: 5, medium: 10, high: 15, critical: 20 };
@@ -733,7 +730,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         points: prev.points + points,
         reportsCount: prev.reportsCount + 1,
-        impactCount: prev.impactCount + impactDelta,
         trustLevel: newTrust,
       };
     });
