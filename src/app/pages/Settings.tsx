@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { auth, googleProvider } from "../../config/firebase";
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { useApp } from "../context/AppContext";
 import type { Language, DistanceUnit } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
@@ -43,7 +43,6 @@ import {
   IconBolt,
   IconMicrophone,
   IconRadio,
-  IconHeadphones,
   IconExternalLink,
   IconPlayerPlay,
   IconMessageCircle,
@@ -108,7 +107,6 @@ export function Settings() {
   const [mapVoice, setMapVoice] = useState("female-default");
   const [voiceVolume, setVoiceVolume] = useState(80);
   const [voiceDuringMusic, setVoiceDuringMusic] = useState(true);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [autoPlayOnNav, setAutoPlayOnNav] = useState(true);
   const [pauseDuringAlerts, setPauseDuringAlerts] = useState(true);
   const [speedoEnabled, setSpeedoEnabled] = useState(true);
@@ -724,38 +722,27 @@ export function Settings() {
     const inputBg = tc.inputBg;
     const inputFocusBorder = "focus:border-[#2b7fff]";
 
-    const handleEmailLogin = () => {
+    const handleEmailLogin = async () => {
       setLoginError("");
       if (!loginEmail.trim()) { setLoginError("Digite seu e-mail"); return; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) { setLoginError("E-mail inválido"); return; }
       if (!loginPassword.trim() || loginPassword.length < 6) { setLoginError("Senha deve ter no mínimo 6 caracteres"); return; }
       setIsLoggingIn(true);
-      setTimeout(() => {
-        setIsLoggingIn(false);
-        if (userProfile) {
-          updateUserProfile({ email: loginEmail, loginMethod: "email" });
-        } else {
-          setUserProfile({
-            name: "",
-            email: loginEmail,
-            neighborhood: "",
-            transportMode: "pedestrian",
-            needs: [],
-            timePreference: "both",
-            points: 0,
-            trustLevel: 1,
-            badges: [],
-            reportsCount: 0,
-            impactCount: 0,
-            confirmationsGiven: 0,
-            denialsGiven: 0,
-            routesSearched: 0,
-            loginMethod: "email",
-          });
-          setIsOnboarded(true);
-        }
+      try {
+        await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
         toast.success(t("login.successEmail", language));
-      }, 1500);
+      } catch (err: any) {
+        const code = err.code || "";
+        if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+          setLoginError("E-mail ou senha incorretos");
+        } else if (code === "auth/too-many-requests") {
+          setLoginError("Muitas tentativas. Tente novamente mais tarde");
+        } else {
+          setLoginError(`Erro: ${code || err.message}`);
+        }
+      } finally {
+        setIsLoggingIn(false);
+      }
     };
 
     const handleGoogleLogin = async () => {
@@ -772,7 +759,7 @@ export function Settings() {
       }
     };
 
-    const handleRegister = () => {
+    const handleRegister = async () => {
       setRegisterError("");
       if (!registerName.trim()) { setRegisterError("Digite seu nome"); return; }
       if (!registerEmail.trim()) { setRegisterError("Digite seu e-mail"); return; }
@@ -781,33 +768,22 @@ export function Settings() {
       if (registerPassword !== registerConfirmPassword) { setRegisterError("As senhas não coincidem"); return; }
       if (!acceptedTerms) { setRegisterError("Aceite os termos de uso para continuar"); return; }
       setIsRegistering(true);
-      setTimeout(() => {
-        setIsRegistering(false);
-        // Create global profile with registration data
-        if (userProfile) {
-          updateUserProfile({ name: registerName.trim(), email: registerEmail, loginMethod: "email" });
-        } else {
-          setUserProfile({
-            name: registerName.trim(),
-            email: registerEmail,
-            neighborhood: "",
-            transportMode: "pedestrian",
-            needs: [],
-            timePreference: "both",
-            points: 0,
-            trustLevel: 1,
-            badges: [],
-            reportsCount: 0,
-            impactCount: 0,
-            confirmationsGiven: 0,
-            denialsGiven: 0,
-            routesSearched: 0,
-            loginMethod: "email",
-          });
-          setIsOnboarded(true);
-        }
+      try {
+        const credential = await createUserWithEmailAndPassword(auth, registerEmail, registerPassword);
+        await updateProfile(credential.user, { displayName: registerName.trim() });
         toast.success(t("register.success", language));
-      }, 1800);
+      } catch (err: any) {
+        const code = err.code || "";
+        if (code === "auth/email-already-in-use") {
+          setRegisterError("Este e-mail já está cadastrado");
+        } else if (code === "auth/weak-password") {
+          setRegisterError("Senha muito fraca. Use ao menos 6 caracteres");
+        } else {
+          setRegisterError(`Erro: ${code || err.message}`);
+        }
+      } finally {
+        setIsRegistering(false);
+      }
     };
 
     const handleLogout = () => {
@@ -1200,7 +1176,15 @@ export function Settings() {
               )}
             </AnimatePresence>
             <div className="flex justify-end">
-              <button type="button" onClick={() => toast("Link de recuperação enviado para seu e-mail")} className="text-[#2b7fff] text-[13px] font-medium font-['Poppins'] active:opacity-70 transition">Esqueceu a senha?</button>
+              <button type="button" onClick={async () => {
+                if (!loginEmail.trim()) { setLoginError("Digite seu e-mail para recuperar a senha"); return; }
+                try {
+                  await sendPasswordResetEmail(auth, loginEmail);
+                  toast.success("Link de recuperação enviado para seu e-mail");
+                } catch (err: any) {
+                  setLoginError(`Erro: ${err.code || err.message}`);
+                }
+              }} className="text-[#2b7fff] text-[13px] font-medium font-['Poppins'] active:opacity-70 transition">Esqueceu a senha?</button>
             </div>
             <button type="button" onClick={handleEmailLogin} disabled={isLoggingIn} className={`w-full py-3.5 rounded-xl bg-[#2b7fff] text-white font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition shadow-lg shadow-[#2b7fff]/20 ${isLoggingIn ? "opacity-60 pointer-events-none" : ""}`}>
               {isLoggingIn ? (
@@ -1426,75 +1410,30 @@ export function Settings() {
 
           {/* Spotify Section */}
           <div className={`px-5 py-3 ${sectionBg}`}>
-            <p className={`${textSecondary} text-[13px] font-medium font-['Poppins']`}>Streaming de música</p>
+            <div className="flex items-center justify-between">
+              <p className={`${textSecondary} text-[13px] font-medium font-['Poppins']`}>Streaming de música</p>
+              <span className={`text-[10px] font-bold font-['Poppins'] px-2 py-0.5 rounded-full ${isDark ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-600"}`}>Em breve</span>
+            </div>
           </div>
           <div className={`${cardBg}`}>
             {/* Spotify connection card */}
-            <div className={`px-5 py-4 border-b ${dividerColor}`}>
+            <div className={`px-5 py-4 border-b ${dividerColor} opacity-60 pointer-events-none select-none`}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-[#1DB954] rounded-xl flex items-center justify-center flex-shrink-0">
                   <IconMusic className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
                   <p className={`${textPrimary} text-[15px] font-medium font-['Poppins']`}>Spotify</p>
-                  <p className={`text-[12px] font-['Poppins'] ${spotifyConnected ? "text-[#1DB954]" : textSecondary}`}>
-                    {spotifyConnected ? "Conectado" : "Não conectado"}
+                  <p className={`text-[12px] font-['Poppins'] ${textSecondary}`}>
+                    Integração em desenvolvimento
                   </p>
                 </div>
-                {spotifyConnected && (
-                  <div className="w-2.5 h-2.5 bg-[#1DB954] rounded-full animate-pulse" />
-                )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (spotifyConnected) {
-                    setSpotifyConnected(false);
-                    toast("Spotify desconectado");
-                  } else {
-                    setSpotifyConnected(true);
-                    toast.success("Spotify conectado com sucesso!");
-                  }
-                }}
-                className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition ${
-                  spotifyConnected
-                    ? `${isDark ? "bg-white/[0.06] border-white/10" : "bg-gray-50 border-gray-200"} border ${textPrimary}`
-                    : "bg-[#1DB954] text-white"
-                }`}
-              >
-                {spotifyConnected ? (
-                  <>
-                    <IconX className="w-4 h-4" />
-                    Desconectar Spotify
-                  </>
-                ) : (
-                  <>
-                    <IconExternalLink className="w-4 h-4" />
-                    Conectar ao Spotify
-                  </>
-                )}
-              </button>
-
-              {spotifyConnected && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="mt-3"
-                >
-                  <div className={`${isDark ? "bg-white/[0.04] border-white/10" : "bg-gray-50 border-gray-100"} rounded-xl p-3.5 border`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${isDark ? "bg-white/10" : "bg-gray-200"} flex items-center justify-center`}>
-                        <IconHeadphones className={`w-5 h-5 ${textSecondary}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`${textPrimary} text-[13px] font-medium font-['Poppins'] truncate`}>Pronto para reproduzir</p>
-                        <p className={`${textSecondary} text-[11px] font-['Poppins']`}>Seu Spotify está conectado ao Alerta+</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              <div className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-medium text-[14px] font-['Poppins'] ${isDark ? "bg-white/[0.06] border-white/10" : "bg-gray-50 border-gray-200"} border ${textSecondary}`}>
+                <IconMusic className="w-4 h-4" />
+                Conectar ao Spotify
+              </div>
             </div>
 
             {/* Auto play on navigation */}
@@ -1990,13 +1929,13 @@ export function Settings() {
         { icon: IconBellRinging, label: t("settings.remindersAlerts", language), iconBg: "bg-red-500", view: "reminders" },
         { icon: IconGauge, label: t("settings.speedometer", language), iconBg: "bg-orange-500", view: "speedometer" },
         { icon: IconMusic, label: t("settings.audio", language), iconBg: "bg-red-500", view: "audio-player" },
+        { icon: IconRoute, label: t("settings.plannedRoutes", language), iconBg: "bg-blue-500", action: () => { navigate("/routes"); } },
       ],
     },
     {
       title: t("settings.notifications", language),
       items: [
         { icon: IconBell, label: t("settings.notifications", language), iconBg: "bg-purple-500", view: "notifications" },
-        { icon: IconRoute, label: t("settings.plannedRoutes", language), iconBg: "bg-blue-500", action: () => { navigate("/routes"); } },
       ],
     },
     {
@@ -2006,7 +1945,7 @@ export function Settings() {
       ],
     },
     {
-      title: "",
+      title: t("settings.about", language),
       items: [
         { icon: IconInfoCircle, label: t("settings.about", language), iconBg: "bg-blue-500", view: "about" },
         { icon: IconHeart, label: t("settings.inviteFriend", language), iconBg: "bg-pink-500", view: "invite-friend" },
