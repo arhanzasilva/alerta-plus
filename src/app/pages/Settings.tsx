@@ -2002,7 +2002,6 @@ export function Settings() {
     {
       title: t("settings.account", language),
       items: [
-        { icon: IconUserCircle, label: t("settings.accountLogin", language), iconBg: "bg-blue-500", view: "account" },
         { icon: IconShieldCheck, label: t("settings.privacy", language), iconBg: "bg-yellow-500", view: "privacy" },
       ],
     },
