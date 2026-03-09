@@ -84,7 +84,7 @@ export function Login() {
       navigate("/map", { replace: true });
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
-        setError(t("login.errorGeneric", language));
+        setError(`Erro: ${err.code || err.message}`);
       }
     } finally {
       setIsLoading(false);

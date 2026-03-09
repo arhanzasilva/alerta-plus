@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { auth, googleProvider } from "../../config/firebase";
+import { signInWithPopup } from "firebase/auth";
 import { useApp } from "../context/AppContext";
 import type { Language, DistanceUnit } from "../context/AppContext";
 import { t, useThemeClasses } from "../context/translations";
@@ -753,35 +755,18 @@ export function Settings() {
       }, 1500);
     };
 
-    const handleGoogleLogin = () => {
+    const handleGoogleLogin = async () => {
       setLoginError(""); setRegisterError(""); setIsLoggingIn(true);
-      setTimeout(() => {
-        setIsLoggingIn(false);
-        const gEmail = "usuario@gmail.com";
-        if (userProfile) {
-          updateUserProfile({ email: gEmail, loginMethod: "google" });
-        } else {
-          setUserProfile({
-            name: t("login.googleUserName", language),
-            email: gEmail,
-            neighborhood: "",
-            transportMode: "pedestrian",
-            needs: [],
-            timePreference: "both",
-            points: 0,
-            trustLevel: 1,
-            badges: [],
-            reportsCount: 0,
-            impactCount: 0,
-            confirmationsGiven: 0,
-            denialsGiven: 0,
-            routesSearched: 0,
-            loginMethod: "google",
-          });
-          setIsOnboarded(true);
-        }
+      try {
+        await signInWithPopup(auth, googleProvider);
         toast.success(t("login.successGoogle", language));
-      }, 1500);
+      } catch (err: any) {
+        if (err.code !== "auth/popup-closed-by-user") {
+          setLoginError(`Erro: ${err.code || err.message}`);
+        }
+      } finally {
+        setIsLoggingIn(false);
+      }
     };
 
     const handleRegister = () => {

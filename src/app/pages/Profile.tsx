@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useApp, ACHIEVEMENT_DEFS } from "../context/AppContext";
+import { auth, googleProvider } from "../../config/firebase";
+import { signInWithPopup } from "firebase/auth";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { t } from "../context/translations";
@@ -168,37 +170,20 @@ export function Profile() {
               <div className="space-y-2 mt-3">
                 <button
                   disabled={isLoggingIn}
-                  onClick={() => {
+                  onClick={async () => {
                     if (isLoggingIn) return;
                     setIsLoggingIn(true);
-                    const gEmail = "usuario@gmail.com";
-                    setTimeout(() => {
-                      if (userProfile) {
-                        updateUserProfile({ email: gEmail, loginMethod: "google" });
-                      } else {
-                        setUserProfile({
-                          name: "Usuário Google",
-                          email: gEmail,
-                          neighborhood: "",
-                          transportMode: "pedestrian",
-                          needs: [],
-                          timePreference: "both",
-                          points: 0,
-                          trustLevel: 1,
-                          badges: [],
-                          reportsCount: 0,
-                          impactCount: 0,
-                          confirmationsGiven: 0,
-                          denialsGiven: 0,
-                          routesSearched: 0,
-                          loginMethod: "google",
-                        });
-                        setIsOnboarded(true);
-                      }
-                      setIsLoggingIn(false);
+                    try {
+                      await signInWithPopup(auth, googleProvider);
                       setShowLoginOptions(false);
                       toast.success(t("login.successGoogle", language));
-                    }, 1500);
+                    } catch (err: any) {
+                      if (err.code !== "auth/popup-closed-by-user") {
+                        toast.error(`Erro: ${err.code || err.message}`);
+                      }
+                    } finally {
+                      setIsLoggingIn(false);
+                    }
                   }}
                   className="w-full bg-white text-slate-900 py-3 rounded-xl font-bold text-[14px] hover:bg-gray-100 active:scale-[0.97] transition flex items-center justify-center gap-2.5 disabled:opacity-60"
                 >
