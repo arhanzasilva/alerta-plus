@@ -303,9 +303,9 @@ export function MapView() {
     }
   }, []);
 
-  // Map center
-  const lat = userLocation?.lat || -3.119;
-  const lng = userLocation?.lng || -60.021;
+  // Map center — fallback to center of Brazil when location not yet known
+  const lat = userLocation?.lat ?? -14.235;
+  const lng = userLocation?.lng ?? -51.925;
 
   // ═══ Mapbox GL integration ═══
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -336,7 +336,7 @@ export function MapView() {
       container: mapContainerRef.current,
       style: isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light,
       center: [lng, lat],
-      zoom: 14,
+      zoom: userLocation ? 14 : 4,
       attributionControl: true,
       logoPosition: "bottom-right",
     });
@@ -593,8 +593,8 @@ export function MapView() {
     if (!selectedAlertType) return;
 
     const loc = alertTargetCoords ?? {
-      lat: userLocation?.lat || -3.119,
-      lng: userLocation?.lng || -60.021,
+      lat: userLocation?.lat ?? -14.235,
+      lng: userLocation?.lng ?? -51.925,
       address: t("mapview.nearYourLocation", language),
     };
     const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
@@ -682,7 +682,7 @@ export function MapView() {
       try {
         const results = await mapboxService.getAddressSuggestions(
           query,
-          userLocation ? [userLocation.lng, userLocation.lat] : [-60.021, -3.119],
+          userLocation ? [userLocation.lng, userLocation.lat] : [-51.925, -14.235],
           {
             limit: 6,
             language: language as 'pt' | 'en' | 'es',

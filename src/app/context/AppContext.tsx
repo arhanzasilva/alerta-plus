@@ -371,7 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     construction: true,
     crimeZones: true,
   });
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>({ lat: -3.1190, lng: -60.0217 });
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [language, setLanguageState] = useState<Language>("pt");
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>("km");
 

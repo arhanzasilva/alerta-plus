@@ -107,10 +107,18 @@ function parseDistanceToMeters(dist: string): number {
   return parseFloat(cleaned) || 0;
 }
 
-// Parse time string like "12 min" to seconds
+// Parse time string like "12 min", "2h 30min", "60h 0min" to seconds
 function parseTimeToSeconds(time: string): number {
-  const match = time.match(/(\d+)/);
-  return match ? parseInt(match[1]) * 60 : 0;
+  const hourMatch = time.match(/(\d+)h/);
+  const minMatch = time.match(/(\d+)\s*min/);
+  const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+  const minutes = minMatch ? parseInt(minMatch[1]) : 0;
+  if (hours > 0 || minutes > 0) {
+    return hours * 3600 + minutes * 60;
+  }
+  // fallback: bare number treated as minutes
+  const bare = time.match(/^(\d+)$/);
+  return bare ? parseInt(bare[1]) * 60 : 0;
 }
 
 // Format seconds to mm:ss or h:mm

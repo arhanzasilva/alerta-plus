@@ -527,6 +527,21 @@ export function Routes() {
     destinationText: string,
     safetyWarnings: string[] = []
   ): RouteStep[] => {
+    // Warnings de zonas de risco só se aplicam ao trecho dentro de Manaus (~25 km do início)
+    const MANAUS_RADIUS_METERS = 25000;
+    const stepWarnings = new Map<number, string>();
+    if (safetyWarnings.length > 0) {
+      let cumDist = 0;
+      let warningIdx = 0;
+      const maxWarnings = Math.min(safetyWarnings.length, 3);
+      for (let i = 0; i < apiSteps.length - 1 && warningIdx < maxWarnings; i++) {
+        if (cumDist <= MANAUS_RADIUS_METERS) {
+          stepWarnings.set(i, safetyWarnings[warningIdx++]);
+        }
+        cumDist += apiSteps[i].distance;
+      }
+    }
+
     const steps = apiSteps.slice(0, -1).map((step, idx) => {
       const instruction = step.instruction;
       let icon: "straight" | "right" | "left" | "arrive" = "straight";
@@ -537,16 +552,12 @@ export function Routes() {
         icon = "left";
       }
 
-      // Adicionar avisos de segurança aos primeiros passos (espaçados)
-      const warningIndex = Math.floor(idx / (apiSteps.length / Math.min(safetyWarnings.length, 3)));
-      const warning = safetyWarnings[warningIndex];
-
       return {
         instruction,
         distance: mapboxService.formatDistance(step.distance),
         icon,
         street: `${t("routes.step", language)} ${idx + 1}`,
-        warning: warning || undefined,
+        warning: stepWarnings.get(idx),
       };
     });
 

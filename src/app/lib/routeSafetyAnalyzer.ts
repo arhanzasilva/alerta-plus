@@ -83,6 +83,24 @@ function pointToSegmentDistance(
   return haversineDistance(py, px, nearestY, nearestX);
 }
 
+// Bounding box da região metropolitana de Manaus (margem de ~60 km)
+const MANAUS_BOUNDS = {
+  minLat: -3.6,
+  maxLat: -2.6,
+  minLng: -60.5,
+  maxLng: -59.5,
+};
+
+function routePassesThroughManaus(routeCoords: [number, number][]): boolean {
+  return routeCoords.some(
+    ([lng, lat]) =>
+      lat >= MANAUS_BOUNDS.minLat &&
+      lat <= MANAUS_BOUNDS.maxLat &&
+      lng >= MANAUS_BOUNDS.minLng &&
+      lng <= MANAUS_BOUNDS.maxLng
+  );
+}
+
 /**
  * Analisa a segurança de uma rota baseada nas zonas de risco.
  *
@@ -93,6 +111,11 @@ export function analyzeRouteSafety(geometry: GeoJSON.LineString): SafetyAnalysis
   const routeCoords = geometry.coordinates as [number, number][];
   const risks: RouteRisk[] = [];
   const warnings: string[] = [];
+
+  // Dados de zonas de risco disponíveis apenas para Manaus
+  if (!routePassesThroughManaus(routeCoords)) {
+    return { safetyScore: 100, riskLevel: 'low', risks: [], warningsCount: 0, warnings: [] };
+  }
 
   // Para cada zona de risco, verificar se a rota passa perto
   for (const zone of CRIME_ZONES) {
