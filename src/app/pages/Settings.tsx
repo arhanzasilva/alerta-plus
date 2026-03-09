@@ -771,6 +771,7 @@ export function Settings() {
       try {
         const credential = await createUserWithEmailAndPassword(auth, registerEmail, registerPassword);
         await updateProfile(credential.user, { displayName: registerName.trim() });
+        localStorage.setItem(`alertaplus_profile_${credential.user.uid}`, JSON.stringify({ name: registerName.trim() }));
         toast.success(t("register.success", language));
       } catch (err: any) {
         const code = err.code || "";

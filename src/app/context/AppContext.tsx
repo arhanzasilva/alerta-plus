@@ -353,9 +353,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         authUidRef.current = firebaseUser.uid;
         const loginMethod = (firebaseUser.providerData[0]?.providerId === "google.com" ? "google" : "email") as "google" | "email";
+        // Check localStorage pre-save (written by Register/Settings before onAuthStateChanged fires)
+        const preSaved = localStorage.getItem(`alertaplus_profile_${firebaseUser.uid}`);
+        const preSavedName = preSaved ? (JSON.parse(preSaved) as Partial<UserProfile>).name : null;
         const defaults: UserProfile = {
           id: firebaseUser.uid,
-          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuário",
+          name: preSavedName || firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuário",
           email: firebaseUser.email || "",
           loginMethod,
           transportMode: "pedestrian",
