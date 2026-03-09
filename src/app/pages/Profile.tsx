@@ -379,10 +379,10 @@ export function Profile() {
 
         <div className="relative z-10 p-6 md:px-8 lg:px-12 space-y-4 max-w-5xl mx-auto">
           {/* Login Card */}
-          <LoginCard />
+          {LoginCard({})}
 
           {/* Menu Items */}
-          <MenuList />
+          {MenuList()}
 
           {/* Credit */}
           <p className="text-center text-[11px] text-gray-400 font-['Poppins'] pt-4 pb-2">
@@ -437,20 +437,20 @@ export function Profile() {
               </div>
             </div>
 
-            <StatsGrid />
+            {StatsGrid()}
           </motion.div>
 
           {/* Connect Account Card */}
           <div className="mb-6">
-            <LoginCard compact />
+            {LoginCard({ compact: true })}
           </div>
 
           {/* Achievements */}
-          <AchievementsSection />
+          {AchievementsSection()}
 
           {/* Actions & Menu */}
           <div className="space-y-2 pb-6">
-            <MenuList />
+            {MenuList()}
 
             {/* Reset Profile */}
             <button
@@ -586,18 +586,16 @@ export function Profile() {
             </div>
           </div>
 
-          <StatsGrid />
+          {StatsGrid()}
         </motion.div>
 
         {/* Achievements */}
-        <AchievementsSection />
+        {AchievementsSection()}
 
         {/* Actions & Menu */}
         <div className="space-y-2 pb-6">
           {/* Account Button */}
-          <motion.button
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
+          <button
             onClick={() => navigate("/settings", { state: { openAccount: true } })}
             className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition border ${menuBtnClass} ${cardShadow}`}
           >
@@ -608,9 +606,9 @@ export function Profile() {
               {t("profile.account", language)}
             </span>
             <IconChevronRight className="w-5 h-5 text-gray-400" />
-          </motion.button>
+          </button>
 
-          <MenuList />
+          {MenuList()}
 
           {/* Logout */}
           <button
