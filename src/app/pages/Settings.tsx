@@ -872,75 +872,8 @@ export function Settings() {
     const strengthLabels = ["", "Muito fraca", "Fraca", "Boa", "Forte"];
     const strengthColors = ["", "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-[#00bc7d]"];
 
-    // === Edit field modal ===
-    const EditFieldModal = () => {
-      if (!editField) return null;
-      const fieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro" };
-      const fieldPlaceholders: Record<string, string> = { name: "Seu nome completo", email: "seu@email.com", neighborhood: "Ex: Cidade Nova, Flores..." };
-
-      return (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-end justify-center"
-          onClick={() => setEditField(null)}
-        >
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className={`${tc.modalBg} rounded-t-[28px] w-full max-w-md p-6 pb-8`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-10 h-1.5 bg-[#d1d5dc] rounded-full mx-auto mb-5" />
-            <h3 className={`${textPrimary} text-[18px] font-bold font-['Poppins'] mb-4`}>{fieldLabels[editField]}</h3>
-
-            <div className="mb-3">
-              <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>
-                {fieldLabels[editField]}
-              </label>
-              <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                  {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
-                  {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
-                  {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
-                </div>
-                <input
-                  type={editField === "email" ? "email" : "text"}
-                  placeholder={fieldPlaceholders[editField]}
-                  value={editValue}
-                  onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
-                  className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`}
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {editError && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
-                  <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${isDark ? "bg-red-500/10 border-red-500/20" : "bg-red-50 border-red-200"}`}>
-                    <IconAlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <span className={`text-[12px] font-medium font-['Poppins'] ${isDark ? "text-red-400" : "text-red-500"}`}>{editError}</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="flex gap-3 mt-4">
-              <button type="button" onClick={() => setEditField(null)} className={`flex-1 py-3.5 rounded-xl border ${isDark ? "border-gray-600" : "border-gray-200"} ${textPrimary} font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition`}>
-                Cancelar
-              </button>
-              <button type="button" onClick={handleSaveEdit} className="flex-1 py-3.5 rounded-xl bg-[#2b7fff] text-white font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition shadow-lg shadow-[#2b7fff]/20">
-                Salvar
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      );
-    };
+    const editFieldLabels: Record<string, string> = { name: "Nome", email: "E-mail", neighborhood: "Bairro" };
+    const editFieldPlaceholders: Record<string, string> = { name: "Seu nome completo", email: "seu@email.com", neighborhood: "Ex: Cidade Nova, Flores..." };
 
     // Derive logged-in state from both local flag and global profile
     const effectiveLoggedIn = !!(userProfile?.loginMethod) || !!(userProfile?.email);
@@ -989,9 +922,72 @@ export function Settings() {
             </div>
           </div>
 
-          {/* Edit field modal */}
+          {/* Edit field modal — JSX inline para evitar remount a cada keystroke */}
           <AnimatePresence>
-            {editField && <EditFieldModal />}
+            {editField && (
+              <motion.div
+                key="edit-modal-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-end justify-center"
+                onClick={() => setEditField(null)}
+              >
+                <motion.div
+                  key="edit-modal-sheet"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                  className={`${tc.modalBg} rounded-t-[28px] w-full max-w-md p-6 pb-8`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="w-10 h-1.5 bg-[#d1d5dc] rounded-full mx-auto mb-5" />
+                  <h3 className={`${textPrimary} text-[18px] font-bold font-['Poppins'] mb-4`}>{editFieldLabels[editField]}</h3>
+
+                  <div className="mb-3">
+                    <label className={`${textSecondary} text-[12px] font-medium font-['Poppins'] mb-1.5 block`}>
+                      {editFieldLabels[editField]}
+                    </label>
+                    <div className="relative">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                        {editField === "name" && <IconUserCircle className="w-[18px] h-[18px] text-gray-400" />}
+                        {editField === "email" && <IconAt className="w-[18px] h-[18px] text-gray-400" />}
+                        {editField === "neighborhood" && <IconMapPin className="w-[18px] h-[18px] text-gray-400" />}
+                      </div>
+                      <input
+                        type={editField === "email" ? "email" : "text"}
+                        placeholder={editFieldPlaceholders[editField]}
+                        value={editValue}
+                        onChange={(e) => { setEditValue(e.target.value); setEditError(""); }}
+                        className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-[14px] font-['Poppins'] outline-none transition-colors ${inputBg} ${inputFocusBorder}`}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {editError && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
+                        <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${isDark ? "bg-red-500/10 border-red-500/20" : "bg-red-50 border-red-200"}`}>
+                          <IconAlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                          <span className={`text-[12px] font-medium font-['Poppins'] ${isDark ? "text-red-400" : "text-red-500"}`}>{editError}</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="flex gap-3 mt-4">
+                    <button type="button" onClick={() => setEditField(null)} className={`flex-1 py-3.5 rounded-xl border ${isDark ? "border-gray-600" : "border-gray-200"} ${textPrimary} font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition`}>
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={handleSaveEdit} className="flex-1 py-3.5 rounded-xl bg-[#2b7fff] text-white font-medium text-[14px] font-['Poppins'] active:scale-[0.98] transition shadow-lg shadow-[#2b7fff]/20">
+                      Salvar
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       );
